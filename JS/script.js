@@ -472,10 +472,10 @@ deadEnemies = deadEnemies.filter(dead => dead.alpha > 0);
 
   
   updateAndDrawBloodParticles();
-if (curacionAlpha > 0) {
-      curacionAlpha -= 0.02; // controlá la velocidad de desvanecimiento
-      if (curacionAlpha < 0) curacionAlpha = 0;
-    }  
+  if (curacionAlpha > 0) {
+    curacionAlpha -= 0.02; // controlá la velocidad de desvanecimiento
+    if (curacionAlpha < 0) curacionAlpha = 0;
+  }  
   
   drawHUD();
   if (showControls) {
