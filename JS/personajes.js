@@ -3,6 +3,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnSalir = document.getElementById('btnSalir');
 
     btnIniciar.addEventListener('click', function() {
-        window.location.href = '/HTML/index.html';
+        window.location.href = '../index.html';
     });
 });

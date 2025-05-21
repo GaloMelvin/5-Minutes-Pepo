@@ -32,7 +32,7 @@ const player = {
   maxHp: 100,
   bullets: 12,
   maxBullets: 12,
-  score: 15,
+  score: 0,
   isReloading: false,
   reloadTime: 2000,
   dodgeCooldown: 1000,
@@ -617,7 +617,7 @@ document.body.appendChild(pauseMenu);
 pauseMenu.innerHTML = `
     <h2>Pausa</h2>
     <button id="resumeButton" style="width: 100%; padding: 10px;margin-bottom:5px; font-size: 16px; border-radius: 5px; background-color: rgba(42, 95, 53, 0.781);; color: white; border: none; cursor: pointer; margin-right: 30px ">Reanudar</button>
-    <button id="mainMenuButton" style="width: 100%; padding: 10px; font-size: 16px; border-radius: 5px; background-color: rgba(42, 95, 53, 0.781);; color: white; border: none; cursor: pointer;"><a href="index.html" style="text-decoration:none;color:white;">Ir al Menú Principal</a></button>
+    <button id="mainMenuButton" style="width: 100%; padding: 10px; font-size: 16px; border-radius: 5px; background-color: rgba(42, 95, 53, 0.781);; color: white; border: none; cursor: pointer;"><a href="../index.html" style="text-decoration:none;color:white;">Ir al Menú Principal</a></button>
 `;
 
 const gameOverMenu = document.createElement("div");
@@ -637,7 +637,7 @@ document.body.appendChild(gameOverMenu);
 gameOverMenu.innerHTML = `
   <h1>Game Over</h1>
   <button id="retryButton" style="width: 100%; padding: 10px;margin-bottom:5px; font-size: 16px; border-radius: 5px; background-color: rgba(95, 42, 42, 0.781); color: white; border: none; cursor: pointer;">Reintentar</button>
-  <button id="gameOverMenuButton" style="width: 100%; padding: 10px; font-size: 16px; border-radius: 5px; background-color: rgba(95, 42, 42, 0.781); color: white; border: none; cursor: pointer;"><a href="index.html" style="text-decoration:none;color:white;">Ir al Menú Principal</a></button>
+  <button id="gameOverMenuButton" style="width: 100%; padding: 10px; font-size: 16px; border-radius: 5px; background-color: rgba(95, 42, 42, 0.781); color: white; border: none; cursor: pointer;"><a href="../index.html" style="text-decoration:none;color:white;">Ir al Menú Principal</a></button>
 `;
 
 const retryButton = gameOverMenu.querySelector("#retryButton");
@@ -664,7 +664,7 @@ function togglePause() {
 // Eventos de los botones del menú de pausa
 resumeButton.addEventListener("click", togglePause);
 mainMenuButton.addEventListener("click", () => {
-  window.location.href = "index.html";
+  window.location.href = "../index.html";
 });
 
 // Detectar tecla Escape para activar/desactivar el menú de pausa
