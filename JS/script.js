@@ -32,7 +32,7 @@ const player = {
   maxHp: 100,
   bullets: 12,
   maxBullets: 12,
-  score: 0,
+  score: 15,
   isReloading: false,
   reloadTime: 2000,
   dodgeCooldown: 1000,
@@ -56,9 +56,11 @@ let showControls = true;
 let controlsAlpha = 1;
 let controlsStartTime = Date.now();
 let muzzleFlashes = [];
+let curacionAlpha = 0;
 const sonidoDisparo = new Audio("/Assets/Sonidos/Bala.mp3");
 const sonidoRecarga = new Audio("/Assets/Sonidos/Recarga.mp3");
 const sonidoDaño = new Audio("/Assets/Sonidos/Daño.mp3");
+const sonidoCuracion = new Audio("/assets/sonidos/Curación.mp3");
 
 function spawnMuzzleFlash(x, y, angle) {
   muzzleFlashes.push({
@@ -70,7 +72,7 @@ function spawnMuzzleFlash(x, y, angle) {
   });
 }
 
-const keys = {};cdocument.addEventListener("keydown", (e) => {
+const keys = {};document.addEventListener("keydown", (e) => {
   keys[e.key] = true;
   
   if (e.key === " " && showControls) {
@@ -328,11 +330,17 @@ function drawReloadBar() {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   //dibujar rotacion del jugador  
-  ctx.save();
-  ctx.translate(player.x, player.y);
-  ctx.rotate(player.angle);
-  ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
-  ctx.restore();
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.angle);
+
+    if (curacionAlpha > 0) {
+      ctx.filter = `drop-shadow(0 0 20px rgba(0, 255, 0, ${curacionAlpha}))`;
+    }
+
+    ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
+    ctx.restore();
+    ctx.filter = "none";
 
   bullets.forEach(bullet => {
     ctx.beginPath();
@@ -418,11 +426,10 @@ deadEnemies.forEach((dead, index) => {
 
 // Quitar enemigos muertos ya desvanecidos
 deadEnemies = deadEnemies.filter(dead => dead.alpha > 0);
-
   
   medkits.forEach(medkit => {
     const pulse = 15 + Math.sin(Date.now() / 200) * 6;
-  
+
     // Círculo amarillo pulsante más grande
     ctx.beginPath();
     ctx.arc(medkit.x, medkit.y, pulse, 0, Math.PI * 2);
@@ -465,6 +472,10 @@ deadEnemies = deadEnemies.filter(dead => dead.alpha > 0);
 
   
   updateAndDrawBloodParticles();
+if (curacionAlpha > 0) {
+      curacionAlpha -= 0.02; // controlá la velocidad de desvanecimiento
+      if (curacionAlpha < 0) curacionAlpha = 0;
+    }  
   
   drawHUD();
   if (showControls) {
@@ -504,6 +515,7 @@ deadEnemies = deadEnemies.filter(dead => dead.alpha > 0);
   }  
 }
 
+
 const medkitImage = new Image();
 medkitImage.src = "/assets/botiquin.png";
 medkitImage.onload = () => {
@@ -532,8 +544,11 @@ function checkMedkitPickup() {
     const dy = player.y - medkit.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    if (distance < medkit.radius + player.width / 2) {
+   if (distance < medkit.radius + player.width / 2) {
       player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.4);
+      sonidoCuracion.currentTime = 0;
+      sonidoCuracion.play();
+      curacionAlpha = 1;
       return false; // eliminar el botiquín
     }
     return true;
@@ -663,7 +678,7 @@ const timerDuration = 5 * 60 * 1000; // 5 minutos en milisegundos
 let timerStart = Date.now();
 
 function updateTimer() {
-  if (isGameOver) return; // Detener el temporizador si el juego ha terminado
+  if (isGameOver) return; // Detener el temporizador si el juego termino
 
   const timeElapsed = Date.now() - timerStart - totalPausedTime;
   const timeRemaining = Math.max(0, timerDuration - timeElapsed);
@@ -696,8 +711,8 @@ function gameLoop() {
     spawnEnemies();
     updateEnemies();
     updateEnemyProjectiles();
-    dropMedkitIfNeeded();     // <--- AGREGAR
-    checkMedkitPickup();      // <--- AGREGAR
+    dropMedkitIfNeeded();
+    checkMedkitPickup();      
     draw();
   }
   updateTimer();
