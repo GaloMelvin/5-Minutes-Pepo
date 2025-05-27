@@ -489,209 +489,50 @@ function drawReloadBar() {
 }
 
 function draw() {
-  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); // ← Reinicia cualquier transformación previa
+  ctx.clearRect(0, 0, canvas.width, canvas.height); // ← Limpia correctamente
 
   if (esMovil) {
-    ctx.scale(0.75, 0.75);
-    ctx.clearRect(0, 0, canvas.width / 0.75, canvas.height / 0.75);
-  } else {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }
-  //dibujar rotacion del jugador  
-    ctx.save();
-    ctx.translate(player.x, player.y);
-    ctx.rotate(player.angle);
-
-    if (curacionAlpha > 0) {
-      ctx.filter = `drop-shadow(0 0 20px rgba(0, 255, 0, ${curacionAlpha}))`;
-    }
-
-    ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
-    ctx.restore();
-    ctx.filter = "none";
-
-  bullets.forEach(bullet => {
-    ctx.beginPath();
-    ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = "yellow";
-    ctx.fill();
-  });
-  ctx.save();
-
-  enemies.forEach(enemy => {
-    ctx.save();
-    ctx.translate(enemy.x, enemy.y);
-    ctx.rotate(enemy.angle);
-  
-    if (enemy.type === 'melee') {
-      ctx.drawImage(meleeEnemyImage, -15, -15, 50, 50);
-    } else {
-      ctx.drawImage(enemyImage, -15, -15, 50, 50);
-    }
-  
-    ctx.restore();
-  });
-  
-
-  enemyProjectiles.forEach(projectile => {
-    ctx.fillStyle = "orange";
-    ctx.beginPath();
-    ctx.arc(projectile.x, projectile.y, 5, 0, Math.PI * 2);
-    ctx.fill();
-  });
-  muzzleFlashes.forEach(flash => {
-    ctx.save();
-    ctx.translate(flash.x, flash.y);
-    ctx.rotate(flash.angle);
-    ctx.globalAlpha = flash.alpha;
-  
-    // Cono difuminado ancho
-    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, flash.size);
-    gradient.addColorStop(0, "rgba(255, 240, 150, 0.9)");
-    gradient.addColorStop(1, "rgba(255, 200, 0, 0)");
-  
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.arc(0, 0, flash.size, -0.6, 0.6); // ángulo más amplio
-    ctx.closePath();
-    ctx.fill();
-  
-    // Líneas pinchudas
-    ctx.strokeStyle = "rgba(255, 255, 150, 0.6)";
-    ctx.lineWidth = 1.5;
-  
-    for (let i = 0; i < 5; i++) {
-      const spikeAngle = (-0.5 + i * 0.25); // 5 rayos dentro del cono
-      const length = flash.size + Math.random() * 10;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(spikeAngle) * length, Math.sin(spikeAngle) * length);
-      ctx.stroke();
-    }
-  
-    ctx.restore();
-  
-    flash.alpha -= 0.08;
-  });
-  muzzleFlashes = muzzleFlashes.filter(f => f.alpha > 0);  
-  
-  // Dibujar animación de muerte
-deadEnemies.forEach((dead, index) => {
-  ctx.save();
-  ctx.globalAlpha = dead.alpha;
-  ctx.translate(dead.x, dead.y);
-  ctx.rotate(dead.angle);
-  
-  if (dead.type === 'melee') {
-    ctx.drawImage(meleeEnemyImage, -15, -15, 50, 50);
-  } else {
-    ctx.drawImage(enemyImage, -15, -15, 50, 50);
+    ctx.scale(0.75, 0.75); // ← Escala una sola vez de forma segura
   }
 
-  ctx.restore();
-  dead.alpha -= 0.05;
-});
+  // Dibujo general
+  ctx.save();
 
-// Quitar enemigos muertos ya desvanecidos
-deadEnemies = deadEnemies.filter(dead => dead.alpha > 0);
-  
+  bullets.forEach(drawBullet);
+  enemyProjectiles.forEach(drawEnemyProjectile);
+
+  enemies.forEach(drawEnemy);
+
   medkits.forEach(medkit => {
     const pulse = 15 + Math.sin(Date.now() / 200) * 6;
 
-    // Círculo amarillo pulsante más grande
     ctx.beginPath();
     ctx.arc(medkit.x, medkit.y, pulse, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(255, 255, 0, 0.4)";
     ctx.fill();
-  
-    // Imagen del botiquín centrada, tamaño 60x60
+
     ctx.drawImage(medkitImage, medkit.x - 30, medkit.y - 30, 60, 60);
-  });  
-
-  function updateAndDrawBloodParticles() {
-    bloodParticles.forEach(p => {
-      p.x += p.dx;
-      p.y += p.dy;
-      p.alpha -= 0.02;
-    });
-  
-    bloodParticles = bloodParticles.filter(p => p.alpha > 0);
-  
-    bloodParticles.forEach(p => {
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(200, 0, 0, ${p.alpha})`;
-      ctx.fill();
-    });
-  }
-  afterimages.forEach((img, index) => {
-    ctx.save();
-    ctx.globalAlpha = img.alpha;
-    ctx.translate(img.x, img.y);
-    ctx.rotate(img.angle);
-    ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
-    ctx.restore();
-  
-    img.alpha -= 0.05;
   });
-  
-  // Limpiar afterimages que ya se desvanecieron
-  afterimages = afterimages.filter(img => img.alpha > 0);  
 
-  
   updateAndDrawBloodParticles();
-  if (curacionAlpha > 0) {
-    curacionAlpha -= 0.02; // controlá la velocidad de desvanecimiento
-    if (curacionAlpha < 0) curacionAlpha = 0;
-  }  
-  
-  drawHUD();
-  if (showControls) {
-    // Si pasaron más de 8 segundos, empezar a desvanecer
-    const elapsed = Date.now() - controlsStartTime;
-    if (elapsed > 4000) {
-      controlsAlpha -= 0.02;
-      if (controlsAlpha <= 0) {
-        showControls = false;
-      }
-    }
-  
-    ctx.save();
-    ctx.globalAlpha = controlsAlpha;
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
-    ctx.fillStyle = "white";
-    ctx.font = "28px Arial";
-    ctx.textAlign = "center";
-  
-    const centerX = canvas.width / 2;
-    const baseY = canvas.height / 2 - 100;
-  
-    ctx.fillText("Controles", centerX, baseY);
-  
-    ctx.font = "22px Arial";
-    ctx.fillText("🖱 Click izquierdo: Disparar", centerX, baseY + 40);
-    ctx.fillText("WASD: Moverse", centerX, baseY + 80);
-    ctx.fillText("R: Recargar", centerX, baseY + 120);
-    ctx.fillText("Espacio: Esquivar", centerX, baseY + 160);
-  
-    ctx.font = "16px Arial";
-    ctx.fillText("Presiona Espacio para saltar", centerX, baseY + 210);
-  
-    ctx.restore();
-    ctx.font = "24px Arial";
-    ctx.fillStyle = "white";
-    ctx.textAlign = "right";
-    const timeElapsed = Date.now() - timerStart - totalPausedTime;
-    const timeRemaining = Math.max(0, timerDuration - timeElapsed);
-    const minutes = Math.floor(timeRemaining / 60000);
-    const seconds = Math.floor((timeRemaining % 60000) / 1000);
-    ctx.fillText(`Tiempo: ${minutes}:${seconds < 10 ? "0" : ""}${seconds}`, canvas.width - 10, 30);
-  }  
-}
 
+  ctx.translate(player.x, player.y);
+  ctx.rotate(player.angle);
+  if (curacionAlpha > 0) {
+    ctx.filter = `drop-shadow(0 0 20px rgba(0, 255, 0, ${curacionAlpha}))`;
+  }
+  ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
+  ctx.filter = "none";
+  ctx.restore();
+
+  drawHUD();
+
+  if (curacionAlpha > 0) {
+    curacionAlpha -= 0.02;
+    if (curacionAlpha < 0) curacionAlpha = 0;
+  }
+}
 
 const medkitImage = new Image();
 medkitImage.src = "/assets/botiquin.png";
