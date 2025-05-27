@@ -4,8 +4,9 @@ const ctx = canvas.getContext("2d");
 const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  const scale = esMovil ? 1.33 : 1;
+  canvas.width = window.innerWidth * scale;
+  canvas.height = window.innerHeight * scale;
 }
 resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
@@ -488,7 +489,14 @@ function drawReloadBar() {
 }
 
 function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+
+  if (esMovil) {
+    ctx.scale(0.75, 0.75); // Aplicar zoom para móviles
+  }
+
+  ctx.clearRect(0, 0, canvas.width / (esMovil ? 0.75 : 1), canvas.height / (esMovil ? 0.75 : 1));
+
   //dibujar rotacion del jugador  
     ctx.save();
     ctx.translate(player.x, player.y);
