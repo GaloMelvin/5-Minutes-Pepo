@@ -3,14 +3,16 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
+// Variable para el tiempo del último fotograma para la velocidad independiente del fotograma
+let lastFrameTime = 0;
+
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 
-  if (esMovil) {
-    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset any previous transforms
-    ctx.scale(0.75, 0.75);
-  }
+  // IMPORTANT: Remove ctx.scale(0.75, 0.75) from here for mobile full screen.
+  // The canvas itself should occupy the full screen.
+  // Drawing elements will now naturally scale with the larger canvas dimensions.
 }
 resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
@@ -32,7 +34,7 @@ const player = {
   y: canvas.height / 5,
   width: 50,
   height: 50,
-  speed: 4,
+  speed: 200, // Adjusted for frame rate independence (pixels per second)
   hp: 100,
   maxHp: 100,
   bullets: 12,
@@ -43,7 +45,7 @@ const player = {
   dodgeCooldown: 1000,
   dodgeDuration: 200,
   isDodging: false,
-  dodgeSpeed: 10,
+  dodgeSpeed: 500, // Adjusted for frame rate independence (pixels per second)
   angle: 0,
 };
 
@@ -59,13 +61,13 @@ let afterimages = [];
 let deadEnemies = [];
 let showControls = true;
 let controlsAlpha = 1;
-let controlsStartTime = Date.now(); // Initialize when the game starts
-const controlsDisplayDuration = 3000; // 3 seconds for controls
+let controlsStartTime = Date.now();
+const controlsDisplayDuration = 3000;
 let muzzleFlashes = [];
 let curacionAlpha = 0;
 const sonidoDisparo = new Audio("/Assets/Sonidos/Bala.mp3");
 const sonidoRecarga = new Audio("/Assets/Sonidos/Recarga.mp3");
-const sonidoDaño = new Audio("/Assets/Sonidos/Daño.mp3"); // Corrected typo in variable name
+const sonidoDaño = new Audio("/Assets/Sonidos/Daño.mp3");
 const sonidoCuracion = new Audio("/assets/sonidos/Curación.mp3");
 
 if (esMovil) {
@@ -110,8 +112,9 @@ if (esMovil) {
     #joystickMove { bottom: 20px; left: 20px; }
     #joystickShoot { bottom: 20px; right: 20px; }
 
+    /* Adjust positions for reload and dodge buttons */
     #btnReload { bottom: 130px; right: 100px; font-size: 18px; }
-    #btnDodge { bottom: 220px; right: 100px; font-size: 22px; }
+    #btnDodge { bottom: 130px; right: 20px; font-size: 22px; } /* Placed to the right of reload */
   `;
   document.head.appendChild(style);
 
@@ -205,7 +208,9 @@ if (esMovil) {
   const reloadBtn = document.getElementById("btnReload");
   reloadBtn.addEventListener("touchstart", () => {
     if (!player.isReloading && player.bullets < player.maxBullets) {
-      const rKey = new KeyboardEvent("keydown", { key: "r" });
+      const rKey = new KeyboardEvent("keydown", {
+        key: "r"
+      });
       document.dispatchEvent(rKey);
     }
   });
@@ -224,8 +229,8 @@ function spawnMuzzleFlash(x, y, angle) {
     x,
     y,
     angle,
-    alpha: 1, // Start with full alpha
-    size: 20 // Max size of the spike
+    alpha: 1,
+    size: 20
   });
 }
 
@@ -235,7 +240,7 @@ document.addEventListener("keydown", (e) => {
 
   if (e.key === " " && showControls) {
     showControls = false;
-    controlsAlpha = 0; // Immediately hide if space is pressed
+    controlsAlpha = 0;
   }
   if (e.key === "r" && !player.isReloading && player.bullets < player.maxBullets) startReload();
   if (e.key === " " && !player.isDodging && Date.now() - dodgeTime > player.dodgeCooldown) {
@@ -257,7 +262,7 @@ function shoot() {
       x: player.x,
       y: player.y,
       angle: player.angle,
-      speed: 10
+      speed: 400 // Bullet speed in pixels per second
     });
     spawnMuzzleFlash(
       player.x + Math.cos(player.angle) * 25,
@@ -295,14 +300,16 @@ function startReload() {
   }, 100);
 }
 
-function movePlayer() {
+function movePlayer(deltaTime) {
   if (isGameOver) return;
 
   const moveSpeed = player.isDodging ? player.dodgeSpeed : player.speed;
-  if (keys["ArrowUp"] || keys["w"]) player.y -= moveSpeed;
-  if (keys["ArrowDown"] || keys["s"]) player.y += moveSpeed;
-  if (keys["ArrowLeft"] || keys["a"]) player.x -= moveSpeed;
-  if (keys["ArrowRight"] || keys["d"]) player.x += moveSpeed;
+  const moveAmount = moveSpeed * deltaTime; // Calculate movement based on delta time
+
+  if (keys["ArrowUp"] || keys["w"]) player.y -= moveAmount;
+  if (keys["ArrowDown"] || keys["s"]) player.y += moveAmount;
+  if (keys["ArrowLeft"] || keys["a"]) player.x -= moveAmount;
+  if (keys["ArrowRight"] || keys["d"]) player.x += moveAmount;
   if (player.isDodging) {
     afterimages.push({
       x: player.x,
@@ -324,7 +331,7 @@ function spawnEnemies() {
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
       hp: enemyType === 'ranged' ? 3 : 5,
-      speed: enemyType === 'ranged' ? 3 : 5,
+      speed: enemyType === 'ranged' ? 150 : 250, // Adjusted for frame rate independence
       angle: 0,
       isShooting: enemyType === 'ranged',
       type: enemyType,
@@ -336,7 +343,7 @@ function spawnEnemies() {
   }
 }
 
-function updateEnemies() {
+function updateEnemies(deltaTime) {
   enemies.forEach((enemy, i) => {
     let dx = player.x - enemy.x;
     let dy = player.y - enemy.y;
@@ -345,8 +352,8 @@ function updateEnemies() {
     enemy.angle = Math.atan2(dy, dx);
 
     if (dist > 20) {
-      enemy.x += (dx / dist) * enemy.speed;
-      enemy.y += (dy / dist) * enemy.speed;
+      enemy.x += (dx / dist) * enemy.speed * deltaTime; // Use deltaTime
+      enemy.y += (dy / dist) * enemy.speed * deltaTime; // Use deltaTime
     }
 
     if (enemy.type === 'ranged' && Date.now() - enemy.lastShot > enemy.shootCooldown) {
@@ -355,25 +362,25 @@ function updateEnemies() {
     }
 
     if (enemy.type === 'ranged' && dist < 20) {
-      if (!player.isDodging) { // Only take damage if not dodging
+      if (!player.isDodging) {
         player.hp -= 10;
         sonidoDaño.currentTime = 0;
         sonidoDaño.play();
         spawnBlood(player.x, player.y);
-        player.x += dx / dist * 20;
-        player.y += dy / dist * 20;
+        player.x += (dx / dist) * 20; // Knockback, can be constant
+        player.y += (dy / dist) * 20; // Knockback, can be constant
         if (player.hp <= 0) gameOver();
       }
     }
 
     if (enemy.type === 'melee' && dist < 20) {
-      if (!player.isDodging) { // Only take damage if not dodging
+      if (!player.isDodging) {
         player.hp -= 20;
         sonidoDaño.currentTime = 0;
         sonidoDaño.play();
         spawnBlood(player.x, player.y);
-        player.x += dx / dist * 40;
-        player.y += dy / dist * 40;
+        player.x += (dx / dist) * 40; // Knockback, can be constant
+        player.y += (dy / dist) * 40; // Knockback, can be constant
         if (player.hp <= 0) gameOver();
       }
     }
@@ -398,7 +405,7 @@ function shootEnemyProjectile(enemy) {
     x: enemy.x,
     y: enemy.y,
     angle,
-    speed: 10
+    speed: 300 // Adjusted for frame rate independence
   });
   spawnMuzzleFlash(
     enemy.x + Math.cos(angle) * 25,
@@ -407,16 +414,16 @@ function shootEnemyProjectile(enemy) {
   );
 }
 
-function updateEnemyProjectiles() {
+function updateEnemyProjectiles(deltaTime) {
   enemyProjectiles = enemyProjectiles.filter(projectile => projectile.x > 0 && projectile.x < canvas.width && projectile.y > 0 && projectile.y < canvas.height);
   enemyProjectiles.forEach((projectile, pIndex) => {
-    projectile.x += Math.cos(projectile.angle) * projectile.speed;
-    projectile.y += Math.sin(projectile.angle) * projectile.speed;
+    projectile.x += Math.cos(projectile.angle) * projectile.speed * deltaTime; // Use deltaTime
+    projectile.y += Math.sin(projectile.angle) * projectile.speed * deltaTime; // Use deltaTime
 
     const dx = projectile.x - player.x;
     const dy = projectile.y - player.y;
     if (Math.sqrt(dx * dx + dy * dy) < 20) {
-      if (!player.isDodging) { // Only take damage if not dodging
+      if (!player.isDodging) {
         player.hp -= 10;
         sonidoDaño.currentTime = 0;
         sonidoDaño.play();
@@ -428,12 +435,12 @@ function updateEnemyProjectiles() {
   });
 }
 
-function updateBullets() {
+function updateBullets(deltaTime) {
   bullets = bullets.filter(bullet => bullet.x > 0 && bullet.x < canvas.width && bullet.y > 0 && bullet.y < canvas.height);
 
   bullets.forEach((bullet, bIndex) => {
-    bullet.x += Math.cos(bullet.angle) * bullet.speed;
-    bullet.y += Math.sin(bullet.angle) * bullet.speed;
+    bullet.x += Math.cos(bullet.angle) * bullet.speed * deltaTime; // Use deltaTime
+    bullet.y += Math.sin(bullet.angle) * bullet.speed * deltaTime; // Use deltaTime
 
     enemies.forEach((enemy, eIndex) => {
       const enemyWidth = 50;
@@ -474,10 +481,13 @@ function drawTimer() {
   ctx.font = "24px Arial";
   ctx.fillStyle = "white";
   ctx.textAlign = "right";
-  ctx.fillText(`Tiempo: ${formattedTime}`, canvas.width - 10, 50); // Position at top right
+  ctx.fillText(`Tiempo: ${formattedTime}`, canvas.width - 10, 50);
 }
 
 function drawHUD() {
+  // Ensure the HUD respects the top-left corner without mobile scaling affecting it
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform for HUD elements
   drawHealthBar();
   ctx.font = "24px Arial";
   ctx.fillStyle = "white";
@@ -485,19 +495,21 @@ function drawHUD() {
   ctx.fillText(`Puntaje: ${player.score}`, 10, 50);
   ctx.fillText(`Balas: ${player.bullets}/${player.maxBullets}`, 10, 80);
   if (player.isReloading) drawReloadBar();
-  drawTimer(); // Draw the timer
+  drawTimer();
+  ctx.restore(); // Restore the previous transform (which might be scaled on mobile)
 }
 
 function drawReloadBar() {
   const barWidth = 50;
   const barHeight = 10;
   ctx.fillStyle = "gray";
+  // The reload bar should also be drawn relative to the player's position,
+  // so no special scaling needed here as player position is in canvas coordinates.
   ctx.fillRect(player.x - barWidth / 2, player.y - player.height - 20, barWidth, barHeight);
   ctx.fillStyle = "white";
   ctx.fillRect(player.x - barWidth / 2, player.y - player.height - 20, (reloadProgress / 100) * barWidth, barHeight);
 }
 
-// Helper functions for drawing
 function drawBullet(bullet) {
   ctx.fillStyle = "yellow";
   ctx.beginPath();
@@ -521,12 +533,12 @@ function drawEnemy(enemy) {
   ctx.restore();
 }
 
-function updateAndDrawBloodParticles() {
+function updateAndDrawBloodParticles(deltaTime) {
   bloodParticles.forEach((p, index) => {
-    p.x += p.dx;
-    p.y += p.dy;
-    p.alpha -= 0.01;
-    p.radius *= 0.98;
+    p.x += p.dx * deltaTime; // Use deltaTime
+    p.y += p.dy * deltaTime; // Use deltaTime
+    p.alpha -= 0.01 * (deltaTime * 60); // Fade out faster/slower based on frame rate
+    p.radius *= (1 - 0.02 * (deltaTime * 60)); // Shrink faster/slower based on frame rate
     if (p.alpha <= 0 || p.radius < 0.5) {
       bloodParticles.splice(index, 1);
     } else {
@@ -544,20 +556,23 @@ function drawMuzzleFlashes() {
     ctx.translate(flash.x, flash.y);
     ctx.rotate(flash.angle);
     ctx.globalAlpha = flash.alpha;
-    ctx.fillStyle = `rgba(255, 255, 0, ${flash.alpha})`; // Yellowish glow
+    ctx.fillStyle = `rgba(255, 255, 0, ${flash.alpha})`;
 
-    // Draw a spike/triangle shape
+    // Draw a spike/triangle shape for muzzle flash
+    const spikeLength = flash.size;
+    const spikeWidth = flash.size / 3;
+
     ctx.beginPath();
     ctx.moveTo(0, 0); // Origin at the "muzzle"
-    ctx.lineTo(flash.size, -flash.size / 3);
-    ctx.lineTo(flash.size * 0.8, 0);
-    ctx.lineTo(flash.size, flash.size / 3);
+    ctx.lineTo(spikeLength, -spikeWidth / 2);
+    ctx.lineTo(spikeLength * 0.7, 0);
+    ctx.lineTo(spikeLength, spikeWidth / 2);
     ctx.closePath();
     ctx.fill();
 
     ctx.restore();
     flash.alpha -= 0.1;
-    flash.size *= 0.9; // Shrink the spike
+    flash.size *= 0.9;
     if (flash.alpha <= 0.1) {
       muzzleFlashes.splice(index, 1);
     }
@@ -595,10 +610,11 @@ function drawDeadEnemies() {
   });
 }
 
+
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  ctx.save();
+  ctx.save(); // Save the state before drawing game elements
 
   bullets.forEach(drawBullet);
   enemyProjectiles.forEach(drawEnemyProjectile);
@@ -618,7 +634,9 @@ function draw() {
     ctx.drawImage(medkitImage, medkit.x - 30, medkit.y - 30, 60, 60);
   });
 
-  updateAndDrawBloodParticles();
+  updateAndDrawBloodParticles(1 / 60); // Pass a fixed delta time for rendering consistency
+  // (or can remove deltaTime here if effects are just visual and not physics-based)
+
 
   ctx.translate(player.x, player.y);
   ctx.rotate(player.angle);
@@ -627,7 +645,7 @@ function draw() {
   }
   ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
   ctx.filter = "none";
-  ctx.restore();
+  ctx.restore(); // Restore the state after drawing game elements
 
   drawHUD();
 
@@ -684,8 +702,8 @@ function spawnBlood(x, y, amount = 10) {
       x,
       y,
       radius: Math.random() * 3 + 2,
-      dx: (Math.random() - 0.5) * 4,
-      dy: (Math.random() - 0.5) * 4,
+      dx: (Math.random() - 0.5) * 200, // Adjusted speed for deltaTime
+      dy: (Math.random() - 0.5) * 200, // Adjusted speed for deltaTime
       alpha: 1
     });
   }
@@ -714,7 +732,7 @@ function restartGame() {
   isGameOver = false;
 
   timerStart = Date.now();
-  showControls = true; // Show controls again on restart
+  showControls = true;
   controlsAlpha = 1;
   controlsStartTime = Date.now();
 }
@@ -809,13 +827,11 @@ function updateTimer() {
 function drawControls() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Calculate alpha for fading effect
   const timeSinceControlsStart = Date.now() - controlsStartTime;
   if (timeSinceControlsStart < controlsDisplayDuration) {
-    controlsAlpha = 1; // Full opacity for the initial duration
+    controlsAlpha = 1;
   } else {
-    // Fade out after the initial duration
-    const fadeProgress = (timeSinceControlsStart - controlsDisplayDuration) / 1000; // 1 second fade
+    const fadeProgress = (timeSinceControlsStart - controlsDisplayDuration) / 1000;
     controlsAlpha = Math.max(0, 1 - fadeProgress);
     if (controlsAlpha <= 0) {
       showControls = false;
@@ -823,7 +839,7 @@ function drawControls() {
   }
 
   ctx.save();
-  ctx.globalAlpha = controlsAlpha; // Apply fade
+  ctx.globalAlpha = controlsAlpha;
   ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -838,7 +854,6 @@ function drawControls() {
   ctx.fillText("R para recargar / Botón R en móvil", canvas.width / 2, canvas.height / 2 + 40);
   ctx.fillText("Espacio para esquivar / Botón ⤴ en móvil", canvas.width / 2, canvas.height / 2 + 80);
 
-  // Only show "Press SPACE" if not fading out
   if (controlsAlpha > 0.5) {
     ctx.fillText("Presiona ESPACIO para comenzar", canvas.width / 2, canvas.height / 2 + 150);
   }
@@ -846,19 +861,25 @@ function drawControls() {
   ctx.restore();
 }
 
-function gameLoop() {
+
+function gameLoop(currentTime) {
+  // Calculate deltaTime (time since last frame)
+  // Convert to seconds for easier calculations (e.g., speed in pixels per second)
+  const deltaTime = (currentTime - lastFrameTime) / 1000;
+  lastFrameTime = currentTime;
+
   if (showControls) {
     drawControls();
     requestAnimationFrame(gameLoop);
     return;
   }
   if (!isPaused && !isGameOver) {
-    movePlayer();
+    movePlayer(deltaTime);
     manageShooting();
-    updateBullets();
-    spawnEnemies();
-    updateEnemies();
-    updateEnemyProjectiles();
+    updateBullets(deltaTime);
+    spawnEnemies(); // Spawning is time-based, not frame-rate dependent, so no deltaTime needed
+    updateEnemies(deltaTime);
+    updateEnemyProjectiles(deltaTime);
     dropMedkitIfNeeded();
     checkMedkitPickup();
     draw();
