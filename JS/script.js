@@ -243,8 +243,8 @@ if (esMovil) {
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%); /* Center horizontally */
-      width: 70px;
-      height: 70px;
+      width: 30px;
+      height: 30px;
       line-height: 70px; /* Center text vertically */
       font-size: 30px; /* Adjust size for the pause symbol */
     }
