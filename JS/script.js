@@ -64,77 +64,157 @@ const sonidoDaño = new Audio("/Assets/Sonidos/Daño.mp3");
 const sonidoCuracion = new Audio("/assets/sonidos/Curación.mp3");
 
 if (esMovil) {
- const controles = document.createElement("div");
-  controles.innerHTML = `
-  <style>
-    .boton-touch {
+  const style = document.createElement("style");
+  style.textContent = `
+    .joystickArea {
       position: fixed;
-      background: rgba(255, 255, 255, 0.2);
-      border: 2px solid white;
+      width: 120px;
+      height: 120px;
+      background: rgba(255,255,255,0.05);
       border-radius: 50%;
+      touch-action: none;
+      z-index: 9999;
+    }
+
+    .joystickStick {
+      position: absolute;
       width: 60px;
       height: 60px;
-      z-index: 9999;
-      text-align: center;
-      line-height: 60px;
-      font-size: 24px;
+      background: rgba(255,255,255,0.4);
+      border-radius: 50%;
+      pointer-events: none;
+      top: 30px;
+      left: 30px;
+    }
+
+    .btnTouch {
+      position: fixed;
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      border: 2px solid white;
+      font-size: 22px;
       color: white;
+      text-align: center;
+      line-height: 70px;
+      z-index: 9999;
       user-select: none;
     }
-    #botonDisparo { bottom: 20px; right: 20px; }
-    #botonRecarga { bottom: 90px; right: 20px; }
-    #botonEsquivar { bottom: 160px; right: 20px; }
-    #botonArriba { bottom: 120px; left: 80px; }
-    #botonAbajo { bottom: 20px; left: 80px; }
-    #botonIzquierda { bottom: 70px; left: 20px; }
-    #botonDerecha { bottom: 70px; left: 140px; }
-    </style>
-    <div id="botonDisparo" class="boton-touch">🔫</div>
-    <div id="botonRecarga" class="boton-touch">R</div>
-    <div id="botonEsquivar" class="boton-touch">⤴</div>
-    <div id="botonArriba" class="boton-touch">▲</div>
-    <div id="botonAbajo" class="boton-touch">▼</div>
-    <div id="botonIzquierda" class="boton-touch">◀</div>
-    <div id="botonDerecha" class="boton-touch">▶</div>
+
+    #joystickMove { bottom: 20px; left: 20px; }
+    #joystickShoot { bottom: 20px; right: 20px; }
+
+    #btnReload { bottom: 130px; right: 100px; font-size: 18px; }
+    #btnDodge { bottom: 220px; right: 100px; font-size: 22px; }
   `;
-  document.body.appendChild(controles);
+  document.head.appendChild(style);
 
-  const simulateKey = (key, type) => {
-    const event = new KeyboardEvent(type, { key });
-    document.dispatchEvent(event);
-  };
+  // Movimiento - joystick izquierdo
+  const moveJoystick = document.createElement("div");
+  moveJoystick.className = "joystickArea";
+  moveJoystick.id = "joystickMove";
+  moveJoystick.innerHTML = `<div class="joystickStick" id="moveStick"></div>`;
+  document.body.appendChild(moveJoystick);
 
-  const bindButton = (id, key) => {
-    const btn = document.getElementById(id);
-    btn.addEventListener("touchstart", e => {
-      e.preventDefault();
-      simulateKey(key, "keydown");
-    });
-    btn.addEventListener("touchend", e => {
-      e.preventDefault();
-      simulateKey(key, "keyup");
-    });
-  };
+  // Disparo - joystick derecho
+  const shootJoystick = document.createElement("div");
+  shootJoystick.className = "joystickArea";
+  shootJoystick.id = "joystickShoot";
+  shootJoystick.innerHTML = `<div class="joystickStick" id="shootStick"></div>`;
+  document.body.appendChild(shootJoystick);
 
-  bindButton("botonArriba", "w");
-  bindButton("botonAbajo", "s");
-  bindButton("botonIzquierda", "a");
-  bindButton("botonDerecha", "d");
-  bindButton("botonRecarga", "r");
+  // Botones extra
+  const botones = [
+    { id: "btnReload", texto: "R" },
+    { id: "btnDodge", texto: "⤴" }
+  ];
 
-  // Disparo: mantener pulsado
-  const btnDisparo = document.getElementById("botonDisparo");
-  btnDisparo.addEventListener("touchstart", e => {
-    e.preventDefault();
+  botones.forEach(({ id, texto }) => {
+    const btn = document.createElement("div");
+    btn.id = id;
+    btn.className = "btnTouch";
+    btn.innerText = texto;
+    document.body.appendChild(btn);
+  });
+
+  // Movimiento con joystick izquierdo
+  const moveStick = document.getElementById("moveStick");
+  let moveTouchId = null;
+
+  moveJoystick.addEventListener("touchstart", (e) => {
+    moveTouchId = e.changedTouches[0].identifier;
+  });
+
+  moveJoystick.addEventListener("touchmove", (e) => {
+    for (let t of e.changedTouches) {
+      if (t.identifier === moveTouchId) {
+        const dx = t.clientX - moveJoystick.offsetLeft - 60;
+        const dy = t.clientY - moveJoystick.offsetTop - 60;
+        const angle = Math.atan2(dy, dx);
+        const dist = Math.min(40, Math.sqrt(dx * dx + dy * dy));
+        moveStick.style.left = `${60 + Math.cos(angle) * dist - 30}px`;
+        moveStick.style.top = `${60 + Math.sin(angle) * dist - 30}px`;
+
+        keys["w"] = dy < -10;
+        keys["s"] = dy > 10;
+        keys["a"] = dx < -10;
+        keys["d"] = dx > 10;
+      }
+    }
+  });
+
+  moveJoystick.addEventListener("touchend", () => {
+    moveStick.style.left = "30px";
+    moveStick.style.top = "30px";
+    keys["w"] = keys["a"] = keys["s"] = keys["d"] = false;
+    moveTouchId = null;
+  });
+
+  // Disparo con joystick derecho
+  const shootStick = document.getElementById("shootStick");
+  let shootTouchId = null;
+
+  shootJoystick.addEventListener("touchstart", (e) => {
+    shootTouchId = e.changedTouches[0].identifier;
     autoShoot = true;
   });
-  btnDisparo.addEventListener("touchend", e => {
-    e.preventDefault();
-    autoShoot = false;
+
+  shootJoystick.addEventListener("touchmove", (e) => {
+    for (let t of e.changedTouches) {
+      if (t.identifier === shootTouchId) {
+        const dx = t.clientX - shootJoystick.offsetLeft - 60;
+        const dy = t.clientY - shootJoystick.offsetTop - 60;
+        const angle = Math.atan2(dy, dx);
+        const dist = Math.min(40, Math.sqrt(dx * dx + dy * dy));
+        shootStick.style.left = `${60 + Math.cos(angle) * dist - 30}px`;
+        shootStick.style.top = `${60 + Math.sin(angle) * dist - 30}px`;
+
+        // Apuntar al ángulo del joystick
+        player.angle = angle;
+      }
+    }
   });
-  const btnEsquivar = document.getElementById("botonEsquivar");
-  btnEsquivar.addEventListener("touchstart", e => {
-    e.preventDefault();
+
+  shootJoystick.addEventListener("touchend", () => {
+    shootStick.style.left = "30px";
+    shootStick.style.top = "30px";
+    autoShoot = false;
+    shootTouchId = null;
+  });
+
+  // Recargar
+  const reloadBtn = document.getElementById("btnReload");
+  reloadBtn.addEventListener("touchstart", () => {
+    if (!player.isReloading && player.bullets < player.maxBullets) {
+      const rKey = new KeyboardEvent("keydown", { key: "r" });
+      document.dispatchEvent(rKey);
+    }
+  });
+
+  // Esquivar
+  const dodgeBtn = document.getElementById("btnDodge");
+  dodgeBtn.addEventListener("touchstart", () => {
     if (!player.isDodging && Date.now() - dodgeTime > player.dodgeCooldown) {
       player.isDodging = true;
       dodgeTime = Date.now();
@@ -428,6 +508,11 @@ function draw() {
     ctx.fillStyle = "yellow";
     ctx.fill();
   });
+  ctx.save();
+
+  if (esMovil) {
+    ctx.scale(0.75, 0.75); // Escala el juego a 75% en móviles
+  }
 
   enemies.forEach(enemy => {
     ctx.save();
