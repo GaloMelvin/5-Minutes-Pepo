@@ -4,9 +4,14 @@ const ctx = canvas.getContext("2d");
 const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 function resizeCanvas() {
-  const scale = esMovil ? 1.33 : 1;
-  canvas.width = window.innerWidth * scale;
-  canvas.height = window.innerHeight * scale;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  // Apply scale only once when resizing for mobile
+  if (esMovil) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset any previous transforms
+    ctx.scale(0.75, 0.75);
+  }
 }
 resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
@@ -61,7 +66,7 @@ let muzzleFlashes = [];
 let curacionAlpha = 0;
 const sonidoDisparo = new Audio("/Assets/Sonidos/Bala.mp3");
 const sonidoRecarga = new Audio("/Assets/Sonidos/Recarga.mp3");
-const sonidoDaño = new Audio("/Assets/Sonidos/Daño.mp3");
+const sonidoDaño = new Audio("/Assets/Sonidos/Daño.mpone");
 const sonidoCuracion = new Audio("/assets/sonidos/Curación.mp3");
 
 if (esMovil) {
@@ -233,12 +238,13 @@ function spawnMuzzleFlash(x, y, angle) {
   });
 }
 
-const keys = {};document.addEventListener("keydown", (e) => {
+const keys = {};
+document.addEventListener("keydown", (e) => {
   keys[e.key] = true;
-  
+
   if (e.key === " " && showControls) {
     showControls = false;
-  }  
+  }
   if (e.key === "r" && !player.isReloading && player.bullets < player.maxBullets) startReload();
   if (e.key === " " && !player.isDodging && Date.now() - dodgeTime > player.dodgeCooldown) {
     player.isDodging = true;
@@ -265,7 +271,7 @@ function shoot() {
       player.x + Math.cos(player.angle) * 25,
       player.y + Math.sin(player.angle) * 25,
       player.angle
-    );    
+    );
     player.bullets--;
     sonidoDisparo.currentTime = 0;
     sonidoDisparo.play();
@@ -313,7 +319,7 @@ function movePlayer() {
       angle: player.angle,
       alpha: 0.5
     });
-  }  
+  }
   if (player.isDodging && Date.now() - dodgeTime > player.dodgeDuration) player.isDodging = false;
   player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
   player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
@@ -322,9 +328,9 @@ function movePlayer() {
 function spawnEnemies() {
   if (Date.now() - lastEnemySpawn > 2000) {
     const enemyType = Math.random() < 0.5 ? 'ranged' : 'melee';
-    
+
     enemies.push({
-      x: Math.random() * canvas.width, 
+      x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
       hp: enemyType === 'ranged' ? 3 : 5,
       speed: enemyType === 'ranged' ? 3 : 5,
@@ -334,7 +340,7 @@ function spawnEnemies() {
       shootCooldown: 1000,
       lastShot: Date.now()
     });
-    
+
     lastEnemySpawn = Date.now();
   }
 }
@@ -344,7 +350,7 @@ function updateEnemies() {
     let dx = player.x - enemy.x;
     let dy = player.y - enemy.y;
     let dist = Math.sqrt(dx * dx + dy * dy);
-    
+
     // Ajuste para que el enemigo apunte hacia el jugador
     enemy.angle = Math.atan2(dy, dx);
 
@@ -352,7 +358,7 @@ function updateEnemies() {
       enemy.x += (dx / dist) * enemy.speed;
       enemy.y += (dy / dist) * enemy.speed;
     }
-    
+
     // Disparo para enemigos a distancia
     if (enemy.type === 'ranged' && Date.now() - enemy.lastShot > enemy.shootCooldown) {
       shootEnemyProjectile(enemy);
@@ -367,8 +373,8 @@ function updateEnemies() {
       player.x += dx / dist * 20;
       player.y += dy / dist * 20;
       if (player.hp <= 0) gameOver();
-    }    
-    
+    }
+
     if (enemy.type === 'melee' && dist < 20) {
       player.hp -= 20;
       sonidoDaño.currentTime = 0;
@@ -377,7 +383,7 @@ function updateEnemies() {
       player.x += dx / dist * 40;
       player.y += dy / dist * 40;
       if (player.hp <= 0) gameOver();
-    }      
+    }
 
     if (enemy.hp <= 0) {
       deadEnemies.push({
@@ -389,7 +395,7 @@ function updateEnemies() {
       });
       enemies.splice(i, 1);
       player.score++;
-    }    
+    }
   });
 }
 
@@ -423,15 +429,9 @@ function updateEnemyProjectiles() {
       spawnBlood(player.x, player.y);
       enemyProjectiles.splice(pIndex, 1);
       if (player.hp <= 0) gameOver();
-    }    
+    }
   });
 }
-
-function manageShooting() {
-  if (isGameOver) return;
-  if (autoShoot) shoot();
-}
-
 
 function updateBullets() {
   bullets = bullets.filter(bullet => bullet.x > 0 && bullet.x < canvas.width && bullet.y > 0 && bullet.y < canvas.height);
@@ -439,7 +439,7 @@ function updateBullets() {
   bullets.forEach((bullet, bIndex) => {
     bullet.x += Math.cos(bullet.angle) * bullet.speed;
     bullet.y += Math.sin(bullet.angle) * bullet.speed;
-    
+
     enemies.forEach((enemy, eIndex) => {
       const enemyWidth = 50;
       const enemyHeight = 50;
@@ -473,7 +473,7 @@ function drawHUD() {
   drawHealthBar();
   ctx.font = "24px Arial";
   ctx.fillStyle = "white";
-  ctx.textAlign = "left"; 
+  ctx.textAlign = "left";
   ctx.fillText(`Puntaje: ${player.score}`, 10, 50);
   ctx.fillText(`Balas: ${player.bullets}/${player.maxBullets}`, 10, 80);
   if (player.isReloading) drawReloadBar();
@@ -488,21 +488,108 @@ function drawReloadBar() {
   ctx.fillRect(player.x - barWidth / 2, player.y - player.height - 20, (reloadProgress / 100) * barWidth, barHeight);
 }
 
+// Helper functions for drawing
+function drawBullet(bullet) {
+  ctx.fillStyle = "yellow";
+  ctx.beginPath();
+  ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawEnemyProjectile(projectile) {
+  ctx.fillStyle = "orange";
+  ctx.beginPath();
+  ctx.arc(projectile.x, projectile.y, 7, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawEnemy(enemy) {
+  ctx.save();
+  ctx.translate(enemy.x, enemy.y);
+  ctx.rotate(enemy.angle);
+  const image = enemy.type === 'ranged' ? enemyImage : meleeEnemyImage;
+  ctx.drawImage(image, -25, -25, 50, 50); // Assuming 50x50 size for enemies
+  ctx.restore();
+}
+
+function updateAndDrawBloodParticles() {
+  bloodParticles.forEach((p, index) => {
+    p.x += p.dx;
+    p.y += p.dy;
+    p.alpha -= 0.01; // Fade out
+    p.radius *= 0.98; // Shrink
+    if (p.alpha <= 0 || p.radius < 0.5) {
+      bloodParticles.splice(index, 1);
+    } else {
+      ctx.fillStyle = `rgba(255, 0, 0, ${p.alpha})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+}
+
+function drawMuzzleFlashes() {
+  muzzleFlashes.forEach((flash, index) => {
+    ctx.save();
+    ctx.translate(flash.x, flash.y);
+    ctx.rotate(flash.angle);
+    ctx.fillStyle = `rgba(255, 255, 0, ${flash.alpha})`;
+    ctx.fillRect(-flash.size / 2, -flash.size / 2, flash.size, flash.size);
+    ctx.restore();
+    flash.alpha -= 0.1;
+    flash.size *= 0.9;
+    if (flash.alpha <= 0.1) {
+      muzzleFlashes.splice(index, 1);
+    }
+  });
+}
+
+function drawAfterimages() {
+  afterimages.forEach((img, index) => {
+    ctx.save();
+    ctx.translate(img.x, img.y);
+    ctx.rotate(img.angle);
+    ctx.globalAlpha = img.alpha;
+    ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
+    ctx.restore();
+    img.alpha -= 0.05;
+    if (img.alpha <= 0) {
+      afterimages.splice(index, 1);
+    }
+  });
+}
+
+function drawDeadEnemies() {
+  deadEnemies.forEach((deadEnemy, index) => {
+    ctx.save();
+    ctx.translate(deadEnemy.x, deadEnemy.y);
+    ctx.rotate(deadEnemy.angle);
+    ctx.globalAlpha = deadEnemy.alpha;
+    const image = deadEnemy.type === 'ranged' ? enemyImage : meleeEnemyImage;
+    ctx.drawImage(image, -25, -25, 50, 50); // Draw with original size
+    ctx.restore();
+    deadEnemy.alpha -= 0.02; // Fade out
+    if (deadEnemy.alpha <= 0) {
+      deadEnemies.splice(index, 1);
+    }
+  });
+}
+
+
 function draw() {
-  ctx.setTransform(1, 0, 0, 1, 0, 0); // ← Reinicia cualquier transformación previa
-  ctx.clearRect(0, 0, canvas.width, canvas.height); // ← Limpia correctamente
+  ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the entire canvas
 
-  if (esMovil) {
-    ctx.scale(0.75, 0.75); // ← Escala una sola vez de forma segura
-  }
-
-  // Dibujo general
+  // Save the current state before applying player-specific transformations
   ctx.save();
 
+  // Draw elements that don't need scaling or special transformations
   bullets.forEach(drawBullet);
   enemyProjectiles.forEach(drawEnemyProjectile);
-
   enemies.forEach(drawEnemy);
+  drawDeadEnemies(); // Draw fading dead enemies
+  drawMuzzleFlashes(); // Draw muzzle flashes
+  drawAfterimages(); // Draw afterimages for dodge
 
   medkits.forEach(medkit => {
     const pulse = 15 + Math.sin(Date.now() / 200) * 6;
@@ -517,6 +604,7 @@ function draw() {
 
   updateAndDrawBloodParticles();
 
+  // Translate and rotate for the player
   ctx.translate(player.x, player.y);
   ctx.rotate(player.angle);
   if (curacionAlpha > 0) {
@@ -524,7 +612,7 @@ function draw() {
   }
   ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
   ctx.filter = "none";
-  ctx.restore();
+  ctx.restore(); // Restore the context to before player transformations
 
   drawHUD();
 
@@ -551,9 +639,9 @@ function dropMedkitIfNeeded() {
       x: Math.random() * (canvas.width - 60) + 30,
       y: Math.random() * (canvas.height - 60) + 30,
       radius: 30
-    });    
+    });
     lastScoreForMedkit = player.score;
-  }  
+  }
 }
 
 function checkMedkitPickup() {
@@ -562,7 +650,7 @@ function checkMedkitPickup() {
     const dy = player.y - medkit.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-   if (distance < medkit.radius + player.width / 2) {
+    if (distance < medkit.radius + player.width / 2) {
       player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.4);
       sonidoCuracion.currentTime = 0;
       sonidoCuracion.play();
@@ -609,7 +697,7 @@ function restartGame() {
   player.isReloading = false;
   totalPausedTime = 0;
   isGameOver = false;
-  
+
   // Reiniciar el temporizador
   timerStart = Date.now();
 }
@@ -628,7 +716,7 @@ pauseMenu.style.padding = "20px";
 pauseMenu.style.textAlign = "center";
 pauseMenu.style.borderRadius = "10px";
 pauseMenu.style.fontFamily = "'Spartan', sans-serif";
-pauseMenu.style.display = "none"; // 
+pauseMenu.style.display = "none"; //
 document.body.appendChild(pauseMenu);
 
 // Agregar contenido al menú de pausa
@@ -687,9 +775,9 @@ mainMenuButton.addEventListener("click", () => {
 
 // Detectar tecla Escape para activar/desactivar el menú de pausa
 document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && player.hp > 0) {
-        togglePause();
-    }
+  if (e.key === "Escape" && player.hp > 0) {
+    togglePause();
+  }
 });
 
 const timerDuration = 5 * 60 * 1000; // 5 minutos en milisegundos
@@ -702,17 +790,37 @@ function updateTimer() {
   const timeRemaining = Math.max(0, timerDuration - timeElapsed);
 
   if (timeRemaining <= 0) {
-    gameOver = true;
+    isGameOver = true; // Corrected: Use isGameOver
     window.location.href = "/HTML/final.html";
   }
 }
 
+// Function to draw initial controls
+function drawControls() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.font = "30px Arial";
+  ctx.fillStyle = "white";
+  ctx.textAlign = "center";
+  ctx.fillText("Controles", canvas.width / 2, canvas.height / 2 - 100);
+
+  ctx.font = "20px Arial";
+  ctx.fillText("WASD o Flechas para mover", canvas.width / 2, canvas.height / 2 - 40);
+  ctx.fillText("Clic Izquierdo / Joystick Derecho para disparar", canvas.width / 2, canvas.height / 2);
+  ctx.fillText("R para recargar / Botón R en móvil", canvas.width / 2, canvas.height / 2 + 40);
+  ctx.fillText("Espacio para esquivar / Botón ⤴ en móvil", canvas.width / 2, canvas.height / 2 + 80);
+  ctx.fillText("Presiona ESPACIO para comenzar", canvas.width / 2, canvas.height / 2 + 150);
+}
+
+
 function gameLoop() {
   if (showControls) {
-    draw(); // solo mostrar controles
+    drawControls(); // Draw controls when showControls is true
     requestAnimationFrame(gameLoop);
     return;
-  }  
+  }
   if (!isPaused && !isGameOver) {
     movePlayer();
     manageShooting();
@@ -721,7 +829,7 @@ function gameLoop() {
     updateEnemies();
     updateEnemyProjectiles();
     dropMedkitIfNeeded();
-    checkMedkitPickup();      
+    checkMedkitPickup();
     draw();
   }
   updateTimer();
