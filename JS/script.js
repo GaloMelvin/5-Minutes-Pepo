@@ -4,8 +4,9 @@ const ctx = canvas.getContext("2d");
 const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  const scale = esMovil ? 1.33 : 1;
+  canvas.width = window.innerWidth * scale;
+  canvas.height = window.innerHeight * scale;
 }
 resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
@@ -488,7 +489,14 @@ function drawReloadBar() {
 }
 
 function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+
+  if (esMovil) {
+    ctx.scale(0.75, 0.75);
+    ctx.clearRect(0, 0, canvas.width / 0.75, canvas.height / 0.75);
+  } else {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
   //dibujar rotacion del jugador  
     ctx.save();
     ctx.translate(player.x, player.y);
@@ -508,6 +516,7 @@ function draw() {
     ctx.fillStyle = "yellow";
     ctx.fill();
   });
+  ctx.save();
 
   enemies.forEach(enemy => {
     ctx.save();
@@ -672,6 +681,14 @@ deadEnemies = deadEnemies.filter(dead => dead.alpha > 0);
     ctx.fillText("Presiona Espacio para saltar", centerX, baseY + 210);
   
     ctx.restore();
+    ctx.font = "24px Arial";
+    ctx.fillStyle = "white";
+    ctx.textAlign = "right";
+    const timeElapsed = Date.now() - timerStart - totalPausedTime;
+    const timeRemaining = Math.max(0, timerDuration - timeElapsed);
+    const minutes = Math.floor(timeRemaining / 60000);
+    const seconds = Math.floor((timeRemaining % 60000) / 1000);
+    ctx.fillText(`Tiempo: ${minutes}:${seconds < 10 ? "0" : ""}${seconds}`, canvas.width - 10, 30);
   }  
 }
 
@@ -838,22 +855,13 @@ const timerDuration = 5 * 60 * 1000; // 5 minutos en milisegundos
 let timerStart = Date.now();
 
 function updateTimer() {
-  if (isGameOver) return; // Detener el temporizador si el juego termino
+  if (isGameOver) return;
 
   const timeElapsed = Date.now() - timerStart - totalPausedTime;
   const timeRemaining = Math.max(0, timerDuration - timeElapsed);
 
-  // Convertir el tiempo restante a minutos y segundos
-  const minutes = Math.floor(timeRemaining / 60000);
-  const seconds = Math.floor((timeRemaining % 60000) / 1000);
-
-  ctx.font = "24px Arial";
-  ctx.fillStyle = "white";
-  ctx.textAlign = "right";
-  ctx.fillText(`Tiempo: ${minutes}:${seconds < 10 ? "0" : ""}${seconds}`, canvas.width - 10, 30);
-
-  if (timeRemaining <= 0) {    
-    gameOver === true
+  if (timeRemaining <= 0) {
+    gameOver = true;
     window.location.href = "/HTML/final.html";
   }
 }
