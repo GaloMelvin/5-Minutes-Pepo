@@ -222,6 +222,39 @@ if (esMovil) {
       player.isDodging = true;
       dodgeTime = Date.now();
     }
+    // Add this to hide controls when dodge button is pressed
+    if (showControls) {
+      showControls = false;
+      controlsAlpha = 0;
+    }
+  });
+
+  // Add the pause button for mobile
+  const pauseBtn = document.createElement("div");
+  pauseBtn.id = "btnPause";
+  pauseBtn.className = "btnTouch"; // Reuse existing styles
+  pauseBtn.innerText = "II"; // Pause symbol
+  document.body.appendChild(pauseBtn);
+
+  // Add style for the new pause button
+  const pauseButtonStyle = document.createElement("style");
+  pauseButtonStyle.textContent = `
+    #btnPause {
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%); /* Center horizontally */
+      width: 70px;
+      height: 70px;
+      line-height: 70px; /* Center text vertically */
+      font-size: 30px; /* Adjust size for the pause symbol */
+    }
+  `;
+  document.head.appendChild(pauseButtonStyle);
+
+  pauseBtn.addEventListener("touchstart", () => {
+    if (player.hp > 0) { // Only allow pausing if not game over
+      togglePause();
+    }
   });
 }
 
