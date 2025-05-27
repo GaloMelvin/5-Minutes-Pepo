@@ -6,13 +6,14 @@ const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 // Variable para el tiempo del último fotograma para la velocidad independiente del fotograma
 let lastFrameTime = 0;
 
+// Definir un factor de velocidad global basado en el dispositivo
+// En PC (no esMovil), queremos que se sienta más rápido, por ejemplo, 1.5 o 2 veces más rápido.
+// En móvil, mantenemos la velocidad "normal" que ya ajustamos para deltaTime.
+const gameSpeedFactor = esMovil ? 1 : 1.5; // Ajusta 1.5 a tu gusto para PC
+
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-
-  // IMPORTANT: Remove ctx.scale(0.75, 0.75) from here for mobile full screen.
-  // The canvas itself should occupy the full screen.
-  // Drawing elements will now naturally scale with the larger canvas dimensions.
 }
 resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
@@ -34,7 +35,7 @@ const player = {
   y: canvas.height / 5,
   width: 50,
   height: 50,
-  speed: 200, // Adjusted for frame rate independence (pixels per second)
+  speed: 200, // Pixeles por segundo (base)
   hp: 100,
   maxHp: 100,
   bullets: 12,
@@ -45,7 +46,7 @@ const player = {
   dodgeCooldown: 1000,
   dodgeDuration: 200,
   isDodging: false,
-  dodgeSpeed: 500, // Adjusted for frame rate independence (pixels per second)
+  dodgeSpeed: 500, // Pixeles por segundo (base)
   angle: 0,
 };
 
@@ -112,7 +113,7 @@ if (esMovil) {
     #joystickMove { bottom: 20px; left: 20px; }
     #joystickShoot { bottom: 20px; right: 20px; }
 
-    /* Adjust positions for reload and dodge buttons */
+    /* Adjusted positions for reload and dodge buttons */
     #btnReload { bottom: 130px; right: 100px; font-size: 18px; }
     #btnDodge { bottom: 130px; right: 20px; font-size: 22px; } /* Placed to the right of reload */
   `;
@@ -262,7 +263,7 @@ function shoot() {
       x: player.x,
       y: player.y,
       angle: player.angle,
-      speed: 400 // Bullet speed in pixels per second
+      speed: 400 // Bullet speed in pixels per second (base)
     });
     spawnMuzzleFlash(
       player.x + Math.cos(player.angle) * 25,
@@ -303,8 +304,9 @@ function startReload() {
 function movePlayer(deltaTime) {
   if (isGameOver) return;
 
-  const moveSpeed = player.isDodging ? player.dodgeSpeed : player.speed;
-  const moveAmount = moveSpeed * deltaTime; // Calculate movement based on delta time
+  // Aplica el factor de velocidad global
+  const currentSpeed = player.isDodging ? player.dodgeSpeed * gameSpeedFactor : player.speed * gameSpeedFactor;
+  const moveAmount = currentSpeed * deltaTime;
 
   if (keys["ArrowUp"] || keys["w"]) player.y -= moveAmount;
   if (keys["ArrowDown"] || keys["s"]) player.y += moveAmount;
@@ -331,7 +333,7 @@ function spawnEnemies() {
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
       hp: enemyType === 'ranged' ? 3 : 5,
-      speed: enemyType === 'ranged' ? 150 : 250, // Adjusted for frame rate independence
+      speed: enemyType === 'ranged' ? 150 : 250, // Pixeles por segundo (base)
       angle: 0,
       isShooting: enemyType === 'ranged',
       type: enemyType,
@@ -352,8 +354,9 @@ function updateEnemies(deltaTime) {
     enemy.angle = Math.atan2(dy, dx);
 
     if (dist > 20) {
-      enemy.x += (dx / dist) * enemy.speed * deltaTime; // Use deltaTime
-      enemy.y += (dy / dist) * enemy.speed * deltaTime; // Use deltaTime
+      // Aplica el factor de velocidad global
+      enemy.x += (dx / dist) * enemy.speed * deltaTime * gameSpeedFactor;
+      enemy.y += (dy / dist) * enemy.speed * deltaTime * gameSpeedFactor;
     }
 
     if (enemy.type === 'ranged' && Date.now() - enemy.lastShot > enemy.shootCooldown) {
@@ -367,8 +370,8 @@ function updateEnemies(deltaTime) {
         sonidoDaño.currentTime = 0;
         sonidoDaño.play();
         spawnBlood(player.x, player.y);
-        player.x += (dx / dist) * 20; // Knockback, can be constant
-        player.y += (dy / dist) * 20; // Knockback, can be constant
+        player.x += (dx / dist) * 20;
+        player.y += (dy / dist) * 20;
         if (player.hp <= 0) gameOver();
       }
     }
@@ -379,8 +382,8 @@ function updateEnemies(deltaTime) {
         sonidoDaño.currentTime = 0;
         sonidoDaño.play();
         spawnBlood(player.x, player.y);
-        player.x += (dx / dist) * 40; // Knockback, can be constant
-        player.y += (dy / dist) * 40; // Knockback, can be constant
+        player.x += (dx / dist) * 40;
+        player.y += (dy / dist) * 40;
         if (player.hp <= 0) gameOver();
       }
     }
@@ -405,7 +408,7 @@ function shootEnemyProjectile(enemy) {
     x: enemy.x,
     y: enemy.y,
     angle,
-    speed: 300 // Adjusted for frame rate independence
+    speed: 300 // Pixeles por segundo (base)
   });
   spawnMuzzleFlash(
     enemy.x + Math.cos(angle) * 25,
@@ -417,8 +420,9 @@ function shootEnemyProjectile(enemy) {
 function updateEnemyProjectiles(deltaTime) {
   enemyProjectiles = enemyProjectiles.filter(projectile => projectile.x > 0 && projectile.x < canvas.width && projectile.y > 0 && projectile.y < canvas.height);
   enemyProjectiles.forEach((projectile, pIndex) => {
-    projectile.x += Math.cos(projectile.angle) * projectile.speed * deltaTime; // Use deltaTime
-    projectile.y += Math.sin(projectile.angle) * projectile.speed * deltaTime; // Use deltaTime
+    // Aplica el factor de velocidad global
+    projectile.x += Math.cos(projectile.angle) * projectile.speed * deltaTime * gameSpeedFactor;
+    projectile.y += Math.sin(projectile.angle) * projectile.speed * deltaTime * gameSpeedFactor;
 
     const dx = projectile.x - player.x;
     const dy = projectile.y - player.y;
@@ -439,8 +443,9 @@ function updateBullets(deltaTime) {
   bullets = bullets.filter(bullet => bullet.x > 0 && bullet.x < canvas.width && bullet.y > 0 && bullet.y < canvas.height);
 
   bullets.forEach((bullet, bIndex) => {
-    bullet.x += Math.cos(bullet.angle) * bullet.speed * deltaTime; // Use deltaTime
-    bullet.y += Math.sin(bullet.angle) * bullet.speed * deltaTime; // Use deltaTime
+    // Aplica el factor de velocidad global
+    bullet.x += Math.cos(bullet.angle) * bullet.speed * deltaTime * gameSpeedFactor;
+    bullet.y += Math.sin(bullet.angle) * bullet.speed * deltaTime * gameSpeedFactor;
 
     enemies.forEach((enemy, eIndex) => {
       const enemyWidth = 50;
@@ -485,7 +490,6 @@ function drawTimer() {
 }
 
 function drawHUD() {
-  // Ensure the HUD respects the top-left corner without mobile scaling affecting it
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform for HUD elements
   drawHealthBar();
@@ -496,15 +500,13 @@ function drawHUD() {
   ctx.fillText(`Balas: ${player.bullets}/${player.maxBullets}`, 10, 80);
   if (player.isReloading) drawReloadBar();
   drawTimer();
-  ctx.restore(); // Restore the previous transform (which might be scaled on mobile)
+  ctx.restore();
 }
 
 function drawReloadBar() {
   const barWidth = 50;
   const barHeight = 10;
   ctx.fillStyle = "gray";
-  // The reload bar should also be drawn relative to the player's position,
-  // so no special scaling needed here as player position is in canvas coordinates.
   ctx.fillRect(player.x - barWidth / 2, player.y - player.height - 20, barWidth, barHeight);
   ctx.fillStyle = "white";
   ctx.fillRect(player.x - barWidth / 2, player.y - player.height - 20, (reloadProgress / 100) * barWidth, barHeight);
@@ -535,10 +537,11 @@ function drawEnemy(enemy) {
 
 function updateAndDrawBloodParticles(deltaTime) {
   bloodParticles.forEach((p, index) => {
-    p.x += p.dx * deltaTime; // Use deltaTime
-    p.y += p.dy * deltaTime; // Use deltaTime
-    p.alpha -= 0.01 * (deltaTime * 60); // Fade out faster/slower based on frame rate
-    p.radius *= (1 - 0.02 * (deltaTime * 60)); // Shrink faster/slower based on frame rate
+    // Estas partículas visuales no necesitan gameSpeedFactor, solo deltaTime
+    p.x += p.dx * deltaTime;
+    p.y += p.dy * deltaTime;
+    p.alpha -= 0.01 * (deltaTime * 60);
+    p.radius *= (1 - 0.02 * (deltaTime * 60));
     if (p.alpha <= 0 || p.radius < 0.5) {
       bloodParticles.splice(index, 1);
     } else {
@@ -558,12 +561,11 @@ function drawMuzzleFlashes() {
     ctx.globalAlpha = flash.alpha;
     ctx.fillStyle = `rgba(255, 255, 0, ${flash.alpha})`;
 
-    // Draw a spike/triangle shape for muzzle flash
     const spikeLength = flash.size;
     const spikeWidth = flash.size / 3;
 
     ctx.beginPath();
-    ctx.moveTo(0, 0); // Origin at the "muzzle"
+    ctx.moveTo(0, 0);
     ctx.lineTo(spikeLength, -spikeWidth / 2);
     ctx.lineTo(spikeLength * 0.7, 0);
     ctx.lineTo(spikeLength, spikeWidth / 2);
@@ -614,7 +616,7 @@ function drawDeadEnemies() {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  ctx.save(); // Save the state before drawing game elements
+  ctx.save();
 
   bullets.forEach(drawBullet);
   enemyProjectiles.forEach(drawEnemyProjectile);
@@ -634,8 +636,7 @@ function draw() {
     ctx.drawImage(medkitImage, medkit.x - 30, medkit.y - 30, 60, 60);
   });
 
-  updateAndDrawBloodParticles(1 / 60); // Pass a fixed delta time for rendering consistency
-  // (or can remove deltaTime here if effects are just visual and not physics-based)
+  updateAndDrawBloodParticles(1 / 60);
 
 
   ctx.translate(player.x, player.y);
@@ -645,7 +646,7 @@ function draw() {
   }
   ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
   ctx.filter = "none";
-  ctx.restore(); // Restore the state after drawing game elements
+  ctx.restore();
 
   drawHUD();
 
@@ -702,8 +703,8 @@ function spawnBlood(x, y, amount = 10) {
       x,
       y,
       radius: Math.random() * 3 + 2,
-      dx: (Math.random() - 0.5) * 200, // Adjusted speed for deltaTime
-      dy: (Math.random() - 0.5) * 200, // Adjusted speed for deltaTime
+      dx: (Math.random() - 0.5) * 200,
+      dy: (Math.random() - 0.5) * 200,
       alpha: 1
     });
   }
@@ -863,8 +864,6 @@ function drawControls() {
 
 
 function gameLoop(currentTime) {
-  // Calculate deltaTime (time since last frame)
-  // Convert to seconds for easier calculations (e.g., speed in pixels per second)
   const deltaTime = (currentTime - lastFrameTime) / 1000;
   lastFrameTime = currentTime;
 
@@ -877,7 +876,7 @@ function gameLoop(currentTime) {
     movePlayer(deltaTime);
     manageShooting();
     updateBullets(deltaTime);
-    spawnEnemies(); // Spawning is time-based, not frame-rate dependent, so no deltaTime needed
+    spawnEnemies();
     updateEnemies(deltaTime);
     updateEnemyProjectiles(deltaTime);
     dropMedkitIfNeeded();
