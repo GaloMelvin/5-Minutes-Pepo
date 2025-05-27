@@ -1,6 +1,7 @@
 let isGameOver = false;
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
+const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 function resizeCanvas() {
   canvas.width = window.innerWidth;
@@ -61,6 +62,85 @@ const sonidoDisparo = new Audio("/Assets/Sonidos/Bala.mp3");
 const sonidoRecarga = new Audio("/Assets/Sonidos/Recarga.mp3");
 const sonidoDaño = new Audio("/Assets/Sonidos/Daño.mp3");
 const sonidoCuracion = new Audio("/assets/sonidos/Curación.mp3");
+
+if (esMovil) {
+ const controles = document.createElement("div");
+  controles.innerHTML = `
+  <style>
+    .boton-touch {
+      position: fixed;
+      background: rgba(255, 255, 255, 0.2);
+      border: 2px solid white;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      z-index: 9999;
+      text-align: center;
+      line-height: 60px;
+      font-size: 24px;
+      color: white;
+      user-select: none;
+    }
+    #botonDisparo { bottom: 20px; right: 20px; }
+    #botonRecarga { bottom: 90px; right: 20px; }
+    #botonEsquivar { bottom: 160px; right: 20px; }
+    #botonArriba { bottom: 120px; left: 80px; }
+    #botonAbajo { bottom: 20px; left: 80px; }
+    #botonIzquierda { bottom: 70px; left: 20px; }
+    #botonDerecha { bottom: 70px; left: 140px; }
+    </style>
+    <div id="botonDisparo" class="boton-touch">🔫</div>
+    <div id="botonRecarga" class="boton-touch">R</div>
+    <div id="botonEsquivar" class="boton-touch">⤴</div>
+    <div id="botonArriba" class="boton-touch">▲</div>
+    <div id="botonAbajo" class="boton-touch">▼</div>
+    <div id="botonIzquierda" class="boton-touch">◀</div>
+    <div id="botonDerecha" class="boton-touch">▶</div>
+  `;
+  document.body.appendChild(controles);
+
+  const simulateKey = (key, type) => {
+    const event = new KeyboardEvent(type, { key });
+    document.dispatchEvent(event);
+  };
+
+  const bindButton = (id, key) => {
+    const btn = document.getElementById(id);
+    btn.addEventListener("touchstart", e => {
+      e.preventDefault();
+      simulateKey(key, "keydown");
+    });
+    btn.addEventListener("touchend", e => {
+      e.preventDefault();
+      simulateKey(key, "keyup");
+    });
+  };
+
+  bindButton("botonArriba", "w");
+  bindButton("botonAbajo", "s");
+  bindButton("botonIzquierda", "a");
+  bindButton("botonDerecha", "d");
+  bindButton("botonRecarga", "r");
+
+  // Disparo: mantener pulsado
+  const btnDisparo = document.getElementById("botonDisparo");
+  btnDisparo.addEventListener("touchstart", e => {
+    e.preventDefault();
+    autoShoot = true;
+  });
+  btnDisparo.addEventListener("touchend", e => {
+    e.preventDefault();
+    autoShoot = false;
+  });
+  const btnEsquivar = document.getElementById("botonEsquivar");
+  btnEsquivar.addEventListener("touchstart", e => {
+    e.preventDefault();
+    if (!player.isDodging && Date.now() - dodgeTime > player.dodgeCooldown) {
+      player.isDodging = true;
+      dodgeTime = Date.now();
+    }
+  });
+}
 
 function spawnMuzzleFlash(x, y, angle) {
   muzzleFlashes.push({
