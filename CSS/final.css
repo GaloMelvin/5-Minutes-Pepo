@@ -74,3 +74,17 @@ body.index { background-image: url('/assets/final.png'); }
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
     background: linear-gradient(145deg, #374212, #232b0a);
 }
+
+@media (max-width: 768px) {
+    .boton-menu {
+        top: 250px;
+        left: 0px;
+        width: 230px;
+    }
+    .desc {
+        font-size: 18px;
+        width: 300px;
+        top: 50px;
+        left: -30px;
+    }
+}

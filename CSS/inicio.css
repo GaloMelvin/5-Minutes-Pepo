@@ -133,3 +133,35 @@ body.index { background-image: url('/assets/fondo\ principal.png'); }
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
     background: linear-gradient(145deg, #374212, #232b0a);
 }
+
+@media (max-width: 768px) {
+    .boton-menu {
+        top: 0px;
+        left: 0px;
+        width: 150px;
+    }
+    .boton-menu2 {
+        top: 0px;
+        left: 0px;
+        width: 270px;
+    }
+    .boton-menu3{
+        top: 0px;
+        left: 0px;
+        width: 180px;
+    }
+    #menu-central {
+        top: -120px;
+        left: 0px;
+    }
+    #menu-central img {
+        width: 50%;
+        height: 50%;
+    }
+    .desc {
+        font-size: 15px;
+        width: 600px;
+        top: -10px;
+        left: 0px;
+    }
+}
