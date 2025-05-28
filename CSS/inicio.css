@@ -5,7 +5,11 @@ body {
     padding: 20px;
     min-height: 100vh;
     font-family: 'Arial', sans-serif;
-    overflow: hidden;
+    overflow: auto;
+}
+
+::-webkit-scrollbar {
+    display: none;
 }
 
 body.index { background-image: url('/assets/fondo\ principal.png'); }
