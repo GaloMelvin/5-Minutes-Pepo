@@ -1,6 +1,15 @@
 let isGameOver = false;
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
+const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+// Variable para el tiempo del último fotograma para la velocidad independiente del fotograma
+let lastFrameTime = 0;
+
+// Definir un factor de velocidad global basado en el dispositivo
+// En PC (no esMovil), queremos que se sienta más rápido, por ejemplo, 1.5 o 2 veces más rápido.
+// En móvil, mantenemos la velocidad "normal" que ya ajustamos para deltaTime.
+const gameSpeedFactor = esMovil ? 1 : 1.5; // Ajusta 1.5 a tu gusto para PC
 
 function resizeCanvas() {
   canvas.width = window.innerWidth;
@@ -21,24 +30,23 @@ enemyImage.src = "/assets/bandido.png";
 const meleeEnemyImage = new Image();
 meleeEnemyImage.src = "/assets/esqueleto.png";
 
-// Variables del pj (llamado objeto)
 const player = {
   x: canvas.width / 5,
   y: canvas.height / 5,
   width: 50,
   height: 50,
-  speed: 4,
+  speed: 200, // Pixeles por segundo (base)
   hp: 100,
   maxHp: 100,
   bullets: 12,
   maxBullets: 12,
-  score: 15,
+  score: 0,
   isReloading: false,
   reloadTime: 2000,
   dodgeCooldown: 1000,
   dodgeDuration: 200,
   isDodging: false,
-  dodgeSpeed: 10,
+  dodgeSpeed: 500, // Pixeles por segundo (base)
   angle: 0,
 };
 
@@ -55,6 +63,7 @@ let deadEnemies = [];
 let showControls = true;
 let controlsAlpha = 1;
 let controlsStartTime = Date.now();
+const controlsDisplayDuration = 3000;
 let muzzleFlashes = [];
 let curacionAlpha = 0;
 const sonidoDisparo = new Audio("/Assets/Sonidos/Bala.mp3");
@@ -62,22 +71,211 @@ const sonidoRecarga = new Audio("/Assets/Sonidos/Recarga.mp3");
 const sonidoDaño = new Audio("/Assets/Sonidos/Daño.mp3");
 const sonidoCuracion = new Audio("/assets/sonidos/Curación.mp3");
 
+if (esMovil) {
+  const style = document.createElement("style");
+  style.textContent = `
+    .joystickArea {
+      position: fixed;
+      width: 120px;
+      height: 120px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 50%;
+      touch-action: none;
+      z-index: 9999;
+    }
+
+    .joystickStick {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      background: rgba(255,255,255,0.4);
+      border-radius: 50%;
+      pointer-events: none;
+      top: 30px;
+      left: 30px;
+    }
+
+    .btnTouch {
+      position: fixed;
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      border: 2px solid white;
+      font-size: 22px;
+      color: white;
+      text-align: center;
+      line-height: 70px;
+      z-index: 9999;
+      user-select: none;
+    }
+
+    #joystickMove { bottom: 20px; left: 20px; }
+    #joystickShoot { bottom: 20px; right: 20px; }
+
+    /* Adjusted positions for reload and dodge buttons */
+    #btnReload { bottom: 130px; right: 100px; font-size: 18px; }
+    #btnDodge { bottom: 130px; right: 20px; font-size: 22px; } /* Placed to the right of reload */
+  `;
+  document.head.appendChild(style);
+
+  const moveJoystick = document.createElement("div");
+  moveJoystick.className = "joystickArea";
+  moveJoystick.id = "joystickMove";
+  moveJoystick.innerHTML = `<div class="joystickStick" id="moveStick"></div>`;
+  document.body.appendChild(moveJoystick);
+
+  const shootJoystick = document.createElement("div");
+  shootJoystick.className = "joystickArea";
+  shootJoystick.id = "joystickShoot";
+  shootJoystick.innerHTML = `<div class="joystickStick" id="shootStick"></div>`;
+  document.body.appendChild(shootJoystick);
+
+  const botones = [
+    { id: "btnReload", texto: "R" },
+    { id: "btnDodge", texto: "⤴" }
+  ];
+
+  botones.forEach(({ id, texto }) => {
+    const btn = document.createElement("div");
+    btn.id = id;
+    btn.className = "btnTouch";
+    btn.innerText = texto;
+    document.body.appendChild(btn);
+  });
+
+  const moveStick = document.getElementById("moveStick");
+  let moveTouchId = null;
+
+  moveJoystick.addEventListener("touchstart", (e) => {
+    moveTouchId = e.changedTouches[0].identifier;
+  });
+
+  moveJoystick.addEventListener("touchmove", (e) => {
+    for (let t of e.changedTouches) {
+      if (t.identifier === moveTouchId) {
+        const dx = t.clientX - moveJoystick.offsetLeft - 60;
+        const dy = t.clientY - moveJoystick.offsetTop - 60;
+        const angle = Math.atan2(dy, dx);
+        const dist = Math.min(40, Math.sqrt(dx * dx + dy * dy));
+        moveStick.style.left = `${60 + Math.cos(angle) * dist - 30}px`;
+        moveStick.style.top = `${60 + Math.sin(angle) * dist - 30}px`;
+
+        keys["w"] = dy < -10;
+        keys["s"] = dy > 10;
+        keys["a"] = dx < -10;
+        keys["d"] = dx > 10;
+      }
+    }
+  });
+
+  moveJoystick.addEventListener("touchend", () => {
+    moveStick.style.left = "30px";
+    moveStick.style.top = "30px";
+    keys["w"] = keys["a"] = keys["s"] = keys["d"] = false;
+    moveTouchId = null;
+  });
+
+  const shootStick = document.getElementById("shootStick");
+  let shootTouchId = null;
+
+  shootJoystick.addEventListener("touchstart", (e) => {
+    shootTouchId = e.changedTouches[0].identifier;
+    autoShoot = true;
+  });
+
+  shootJoystick.addEventListener("touchmove", (e) => {
+    for (let t of e.changedTouches) {
+      if (t.identifier === shootTouchId) {
+        const dx = t.clientX - shootJoystick.offsetLeft - 60;
+        const dy = t.clientY - shootJoystick.offsetTop - 60;
+        const angle = Math.atan2(dy, dx);
+        const dist = Math.min(40, Math.sqrt(dx * dx + dy * dy));
+        shootStick.style.left = `${60 + Math.cos(angle) * dist - 30}px`;
+        shootStick.style.top = `${60 + Math.sin(angle) * dist - 30}px`;
+
+        player.angle = angle;
+      }
+    }
+  });
+
+  shootJoystick.addEventListener("touchend", () => {
+    shootStick.style.left = "30px";
+    shootStick.style.top = "30px";
+    autoShoot = false;
+    shootTouchId = null;
+  });
+
+  const reloadBtn = document.getElementById("btnReload");
+  reloadBtn.addEventListener("touchstart", () => {
+    if (!player.isReloading && player.bullets < player.maxBullets) {
+      const rKey = new KeyboardEvent("keydown", {
+        key: "r"
+      });
+      document.dispatchEvent(rKey);
+    }
+  });
+
+  const dodgeBtn = document.getElementById("btnDodge");
+  dodgeBtn.addEventListener("touchstart", () => {
+    if (!player.isDodging && Date.now() - dodgeTime > player.dodgeCooldown) {
+      player.isDodging = true;
+      dodgeTime = Date.now();
+    }
+    // Add this to hide controls when dodge button is pressed
+    if (showControls) {
+      showControls = false;
+      controlsAlpha = 0;
+    }
+  });
+
+  // Add the pause button for mobile
+  const pauseBtn = document.createElement("div");
+  pauseBtn.id = "btnPause";
+  pauseBtn.className = "btnTouch"; // Reuse existing styles
+  pauseBtn.innerText = "II"; // Pause symbol
+  document.body.appendChild(pauseBtn);
+
+  // Add style for the new pause button
+  const pauseButtonStyle = document.createElement("style");
+  pauseButtonStyle.textContent = `
+    #btnPause {
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%); /* Center horizontally */
+      width: 30px;
+      height: 30px;
+      line-height: 70px; /* Center text vertically */
+      font-size: 30px; /* Adjust size for the pause symbol */
+    }
+  `;
+  document.head.appendChild(pauseButtonStyle);
+
+  pauseBtn.addEventListener("touchstart", () => {
+    if (player.hp > 0) { // Only allow pausing if not game over
+      togglePause();
+    }
+  });
+}
+
 function spawnMuzzleFlash(x, y, angle) {
   muzzleFlashes.push({
     x,
     y,
     angle,
-    alpha: 0.8,
-    size: 30
+    alpha: 1,
+    size: 20
   });
 }
 
-const keys = {};document.addEventListener("keydown", (e) => {
+const keys = {};
+document.addEventListener("keydown", (e) => {
   keys[e.key] = true;
-  
+
   if (e.key === " " && showControls) {
     showControls = false;
-  }  
+    controlsAlpha = 0;
+  }
   if (e.key === "r" && !player.isReloading && player.bullets < player.maxBullets) startReload();
   if (e.key === " " && !player.isDodging && Date.now() - dodgeTime > player.dodgeCooldown) {
     player.isDodging = true;
@@ -98,13 +296,13 @@ function shoot() {
       x: player.x,
       y: player.y,
       angle: player.angle,
-      speed: 10
+      speed: 400 // Bullet speed in pixels per second (base)
     });
     spawnMuzzleFlash(
       player.x + Math.cos(player.angle) * 25,
       player.y + Math.sin(player.angle) * 25,
       player.angle
-    );    
+    );
     player.bullets--;
     sonidoDisparo.currentTime = 0;
     sonidoDisparo.play();
@@ -116,7 +314,6 @@ function shoot() {
 
 function manageShooting() {
   if (isGameOver) return;
-  // Permitir disparar solo si no se está recargando
   if (autoShoot && !player.isReloading) {
     shoot();
   }
@@ -137,14 +334,17 @@ function startReload() {
   }, 100);
 }
 
-function movePlayer() {
+function movePlayer(deltaTime) {
   if (isGameOver) return;
 
-  const moveSpeed = player.isDodging ? player.dodgeSpeed : player.speed;
-  if (keys["ArrowUp"] || keys["w"]) player.y -= moveSpeed;
-  if (keys["ArrowDown"] || keys["s"]) player.y += moveSpeed;
-  if (keys["ArrowLeft"] || keys["a"]) player.x -= moveSpeed;
-  if (keys["ArrowRight"] || keys["d"]) player.x += moveSpeed;
+  // Aplica el factor de velocidad global
+  const currentSpeed = player.isDodging ? player.dodgeSpeed * gameSpeedFactor : player.speed * gameSpeedFactor;
+  const moveAmount = currentSpeed * deltaTime;
+
+  if (keys["ArrowUp"] || keys["w"]) player.y -= moveAmount;
+  if (keys["ArrowDown"] || keys["s"]) player.y += moveAmount;
+  if (keys["ArrowLeft"] || keys["a"]) player.x -= moveAmount;
+  if (keys["ArrowRight"] || keys["d"]) player.x += moveAmount;
   if (player.isDodging) {
     afterimages.push({
       x: player.x,
@@ -152,7 +352,7 @@ function movePlayer() {
       angle: player.angle,
       alpha: 0.5
     });
-  }  
+  }
   if (player.isDodging && Date.now() - dodgeTime > player.dodgeDuration) player.isDodging = false;
   player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
   player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
@@ -161,62 +361,65 @@ function movePlayer() {
 function spawnEnemies() {
   if (Date.now() - lastEnemySpawn > 2000) {
     const enemyType = Math.random() < 0.5 ? 'ranged' : 'melee';
-    
+
     enemies.push({
-      x: Math.random() * canvas.width, 
+      x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
       hp: enemyType === 'ranged' ? 3 : 5,
-      speed: enemyType === 'ranged' ? 3 : 5,
+      speed: enemyType === 'ranged' ? 150 : 250, // Pixeles por segundo (base)
       angle: 0,
       isShooting: enemyType === 'ranged',
       type: enemyType,
       shootCooldown: 1000,
       lastShot: Date.now()
     });
-    
+
     lastEnemySpawn = Date.now();
   }
 }
 
-function updateEnemies() {
+function updateEnemies(deltaTime) {
   enemies.forEach((enemy, i) => {
     let dx = player.x - enemy.x;
     let dy = player.y - enemy.y;
     let dist = Math.sqrt(dx * dx + dy * dy);
-    
-    // Ajuste para que el enemigo apunte hacia el jugador
+
     enemy.angle = Math.atan2(dy, dx);
 
     if (dist > 20) {
-      enemy.x += (dx / dist) * enemy.speed;
-      enemy.y += (dy / dist) * enemy.speed;
+      // Aplica el factor de velocidad global
+      enemy.x += (dx / dist) * enemy.speed * deltaTime * gameSpeedFactor;
+      enemy.y += (dy / dist) * enemy.speed * deltaTime * gameSpeedFactor;
     }
-    
-    // Disparo para enemigos a distancia
+
     if (enemy.type === 'ranged' && Date.now() - enemy.lastShot > enemy.shootCooldown) {
       shootEnemyProjectile(enemy);
       enemy.lastShot = Date.now();
     }
 
     if (enemy.type === 'ranged' && dist < 20) {
-      player.hp -= 10;
-      sonidoDaño.currentTime = 0;
-      sonidoDaño.play();
-      spawnBlood(player.x, player.y);
-      player.x += dx / dist * 20;
-      player.y += dy / dist * 20;
-      if (player.hp <= 0) gameOver();
-    }    
-    
+      if (!player.isDodging) {
+        player.hp -= 10;
+        sonidoDaño.currentTime = 0;
+        sonidoDaño.play();
+        spawnBlood(player.x, player.y);
+        player.x += (dx / dist) * 20;
+        player.y += (dy / dist) * 20;
+        if (player.hp <= 0) gameOver();
+      }
+    }
+
     if (enemy.type === 'melee' && dist < 20) {
-      player.hp -= 20;
-      sonidoDaño.currentTime = 0;
-      sonidoDaño.play();
-      spawnBlood(player.x, player.y);
-      player.x += dx / dist * 40;
-      player.y += dy / dist * 40;
-      if (player.hp <= 0) gameOver();
-    }      
+      if (!player.isDodging) {
+        player.hp -= 20;
+        sonidoDaño.currentTime = 0;
+        sonidoDaño.play();
+        spawnBlood(player.x, player.y);
+        player.x += (dx / dist) * 40;
+        player.y += (dy / dist) * 40;
+        if (player.hp <= 0) gameOver();
+      }
+    }
 
     if (enemy.hp <= 0) {
       deadEnemies.push({
@@ -228,7 +431,7 @@ function updateEnemies() {
       });
       enemies.splice(i, 1);
       player.score++;
-    }    
+    }
   });
 }
 
@@ -238,7 +441,7 @@ function shootEnemyProjectile(enemy) {
     x: enemy.x,
     y: enemy.y,
     angle,
-    speed: 10
+    speed: 300 // Pixeles por segundo (base)
   });
   spawnMuzzleFlash(
     enemy.x + Math.cos(angle) * 25,
@@ -247,38 +450,36 @@ function shootEnemyProjectile(enemy) {
   );
 }
 
-function updateEnemyProjectiles() {
+function updateEnemyProjectiles(deltaTime) {
   enemyProjectiles = enemyProjectiles.filter(projectile => projectile.x > 0 && projectile.x < canvas.width && projectile.y > 0 && projectile.y < canvas.height);
   enemyProjectiles.forEach((projectile, pIndex) => {
-    projectile.x += Math.cos(projectile.angle) * projectile.speed;
-    projectile.y += Math.sin(projectile.angle) * projectile.speed;
+    // Aplica el factor de velocidad global
+    projectile.x += Math.cos(projectile.angle) * projectile.speed * deltaTime * gameSpeedFactor;
+    projectile.y += Math.sin(projectile.angle) * projectile.speed * deltaTime * gameSpeedFactor;
 
     const dx = projectile.x - player.x;
     const dy = projectile.y - player.y;
     if (Math.sqrt(dx * dx + dy * dy) < 20) {
-      player.hp -= 10;
-      sonidoDaño.currentTime = 0;
-      sonidoDaño.play();
-      spawnBlood(player.x, player.y);
+      if (!player.isDodging) {
+        player.hp -= 10;
+        sonidoDaño.currentTime = 0;
+        sonidoDaño.play();
+        spawnBlood(player.x, player.y);
+      }
       enemyProjectiles.splice(pIndex, 1);
       if (player.hp <= 0) gameOver();
-    }    
+    }
   });
 }
 
-function manageShooting() {
-  if (isGameOver) return;
-  if (autoShoot) shoot();
-}
-
-
-function updateBullets() {
+function updateBullets(deltaTime) {
   bullets = bullets.filter(bullet => bullet.x > 0 && bullet.x < canvas.width && bullet.y > 0 && bullet.y < canvas.height);
 
   bullets.forEach((bullet, bIndex) => {
-    bullet.x += Math.cos(bullet.angle) * bullet.speed;
-    bullet.y += Math.sin(bullet.angle) * bullet.speed;
-    
+    // Aplica el factor de velocidad global
+    bullet.x += Math.cos(bullet.angle) * bullet.speed * deltaTime * gameSpeedFactor;
+    bullet.y += Math.sin(bullet.angle) * bullet.speed * deltaTime * gameSpeedFactor;
+
     enemies.forEach((enemy, eIndex) => {
       const enemyWidth = 50;
       const enemyHeight = 50;
@@ -289,14 +490,13 @@ function updateBullets() {
         bullet.y < enemy.y + enemyHeight / 2
       ) {
         enemy.hp--;
-        spawnBlood(enemy.x, enemy.y); // ← sangre del enemigo
+        spawnBlood(enemy.x, enemy.y);
         bullets.splice(bIndex, 1);
         return;
       }
     });
   });
 }
-
 
 function drawHealthBar() {
   const barWidth = 200;
@@ -309,13 +509,17 @@ function drawHealthBar() {
 }
 
 function drawHUD() {
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform for HUD elements
   drawHealthBar();
   ctx.font = "24px Arial";
   ctx.fillStyle = "white";
-  ctx.textAlign = "left"; 
+  ctx.textAlign = "left";
   ctx.fillText(`Puntaje: ${player.score}`, 10, 50);
   ctx.fillText(`Balas: ${player.bullets}/${player.maxBullets}`, 10, 80);
   if (player.isReloading) drawReloadBar();
+  drawTimer();
+  ctx.restore();
 }
 
 function drawReloadBar() {
@@ -327,194 +531,149 @@ function drawReloadBar() {
   ctx.fillRect(player.x - barWidth / 2, player.y - player.height - 20, (reloadProgress / 100) * barWidth, barHeight);
 }
 
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  //dibujar rotacion del jugador  
-    ctx.save();
-    ctx.translate(player.x, player.y);
-    ctx.rotate(player.angle);
+function drawBullet(bullet) {
+  ctx.fillStyle = "yellow";
+  ctx.beginPath();
+  ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
+  ctx.fill();
+}
 
-    if (curacionAlpha > 0) {
-      ctx.filter = `drop-shadow(0 0 20px rgba(0, 255, 0, ${curacionAlpha}))`;
-    }
+function drawEnemyProjectile(projectile) {
+  ctx.fillStyle = "orange";
+  ctx.beginPath();
+  ctx.arc(projectile.x, projectile.y, 7, 0, Math.PI * 2);
+  ctx.fill();
+}
 
-    ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
-    ctx.restore();
-    ctx.filter = "none";
+function drawEnemy(enemy) {
+  ctx.save();
+  ctx.translate(enemy.x, enemy.y);
+  ctx.rotate(enemy.angle);
+  const image = enemy.type === 'ranged' ? enemyImage : meleeEnemyImage;
+  ctx.drawImage(image, -25, -25, 50, 50);
+  ctx.restore();
+}
 
-  bullets.forEach(bullet => {
-    ctx.beginPath();
-    ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = "yellow";
-    ctx.fill();
-  });
-
-  enemies.forEach(enemy => {
-    ctx.save();
-    ctx.translate(enemy.x, enemy.y);
-    ctx.rotate(enemy.angle);
-  
-    if (enemy.type === 'melee') {
-      ctx.drawImage(meleeEnemyImage, -15, -15, 50, 50);
+function updateAndDrawBloodParticles(deltaTime) {
+  bloodParticles.forEach((p, index) => {
+    // Estas partículas visuales no necesitan gameSpeedFactor, solo deltaTime
+    p.x += p.dx * deltaTime;
+    p.y += p.dy * deltaTime;
+    p.alpha -= 0.01 * (deltaTime * 60);
+    p.radius *= (1 - 0.02 * (deltaTime * 60));
+    if (p.alpha <= 0 || p.radius < 0.5) {
+      bloodParticles.splice(index, 1);
     } else {
-      ctx.drawImage(enemyImage, -15, -15, 50, 50);
+      ctx.fillStyle = `rgba(255, 0, 0, ${p.alpha})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      ctx.fill();
     }
-  
-    ctx.restore();
   });
-  
+}
 
-  enemyProjectiles.forEach(projectile => {
-    ctx.fillStyle = "orange";
-    ctx.beginPath();
-    ctx.arc(projectile.x, projectile.y, 5, 0, Math.PI * 2);
-    ctx.fill();
-  });
-  muzzleFlashes.forEach(flash => {
+function drawMuzzleFlashes() {
+  muzzleFlashes.forEach((flash, index) => {
     ctx.save();
     ctx.translate(flash.x, flash.y);
     ctx.rotate(flash.angle);
     ctx.globalAlpha = flash.alpha;
-  
-    // Cono difuminado ancho
-    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, flash.size);
-    gradient.addColorStop(0, "rgba(255, 240, 150, 0.9)");
-    gradient.addColorStop(1, "rgba(255, 200, 0, 0)");
-  
-    ctx.fillStyle = gradient;
+    ctx.fillStyle = `rgba(255, 255, 0, ${flash.alpha})`;
+
+    const spikeLength = flash.size;
+    const spikeWidth = flash.size / 3;
+
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.arc(0, 0, flash.size, -0.6, 0.6); // ángulo más amplio
+    ctx.lineTo(spikeLength, -spikeWidth / 2);
+    ctx.lineTo(spikeLength * 0.7, 0);
+    ctx.lineTo(spikeLength, spikeWidth / 2);
     ctx.closePath();
     ctx.fill();
-  
-    // Líneas pinchudas
-    ctx.strokeStyle = "rgba(255, 255, 150, 0.6)";
-    ctx.lineWidth = 1.5;
-  
-    for (let i = 0; i < 5; i++) {
-      const spikeAngle = (-0.5 + i * 0.25); // 5 rayos dentro del cono
-      const length = flash.size + Math.random() * 10;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(spikeAngle) * length, Math.sin(spikeAngle) * length);
-      ctx.stroke();
-    }
-  
+
     ctx.restore();
-  
-    flash.alpha -= 0.08;
+    flash.alpha -= 0.1;
+    flash.size *= 0.9;
+    if (flash.alpha <= 0.1) {
+      muzzleFlashes.splice(index, 1);
+    }
   });
-  muzzleFlashes = muzzleFlashes.filter(f => f.alpha > 0);  
-  
-  // Dibujar animación de muerte
-deadEnemies.forEach((dead, index) => {
+}
+
+function drawAfterimages() {
+  afterimages.forEach((img, index) => {
+    ctx.save();
+    ctx.translate(img.x, img.y);
+    ctx.rotate(img.angle);
+    ctx.globalAlpha = img.alpha;
+    ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
+    ctx.restore();
+    img.alpha -= 0.05;
+    if (img.alpha <= 0) {
+      afterimages.splice(index, 1);
+    }
+  });
+}
+
+function drawDeadEnemies() {
+  deadEnemies.forEach((deadEnemy, index) => {
+    ctx.save();
+    ctx.translate(deadEnemy.x, deadEnemy.y);
+    ctx.rotate(deadEnemy.angle);
+    ctx.globalAlpha = deadEnemy.alpha;
+    const image = deadEnemy.type === 'ranged' ? enemyImage : meleeEnemyImage;
+    ctx.drawImage(image, -25, -25, 50, 50);
+    ctx.restore();
+    deadEnemy.alpha -= 0.02;
+    if (deadEnemy.alpha <= 0) {
+      deadEnemies.splice(index, 1);
+    }
+  });
+}
+
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
   ctx.save();
-  ctx.globalAlpha = dead.alpha;
-  ctx.translate(dead.x, dead.y);
-  ctx.rotate(dead.angle);
-  
-  if (dead.type === 'melee') {
-    ctx.drawImage(meleeEnemyImage, -15, -15, 50, 50);
-  } else {
-    ctx.drawImage(enemyImage, -15, -15, 50, 50);
-  }
 
-  ctx.restore();
-  dead.alpha -= 0.05;
-});
+  bullets.forEach(drawBullet);
+  enemyProjectiles.forEach(drawEnemyProjectile);
+  enemies.forEach(drawEnemy);
+  drawDeadEnemies();
+  drawMuzzleFlashes();
+  drawAfterimages();
 
-// Quitar enemigos muertos ya desvanecidos
-deadEnemies = deadEnemies.filter(dead => dead.alpha > 0);
-  
   medkits.forEach(medkit => {
     const pulse = 15 + Math.sin(Date.now() / 200) * 6;
 
-    // Círculo amarillo pulsante más grande
     ctx.beginPath();
     ctx.arc(medkit.x, medkit.y, pulse, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(255, 255, 0, 0.4)";
     ctx.fill();
-  
-    // Imagen del botiquín centrada, tamaño 60x60
+
     ctx.drawImage(medkitImage, medkit.x - 30, medkit.y - 30, 60, 60);
-  });  
-
-  function updateAndDrawBloodParticles() {
-    bloodParticles.forEach(p => {
-      p.x += p.dx;
-      p.y += p.dy;
-      p.alpha -= 0.02;
-    });
-  
-    bloodParticles = bloodParticles.filter(p => p.alpha > 0);
-  
-    bloodParticles.forEach(p => {
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(200, 0, 0, ${p.alpha})`;
-      ctx.fill();
-    });
-  }
-  afterimages.forEach((img, index) => {
-    ctx.save();
-    ctx.globalAlpha = img.alpha;
-    ctx.translate(img.x, img.y);
-    ctx.rotate(img.angle);
-    ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
-    ctx.restore();
-  
-    img.alpha -= 0.05;
   });
-  
-  // Limpiar afterimages que ya se desvanecieron
-  afterimages = afterimages.filter(img => img.alpha > 0);  
 
-  
-  updateAndDrawBloodParticles();
+  updateAndDrawBloodParticles(1 / 60);
+
+
+  ctx.translate(player.x, player.y);
+  ctx.rotate(player.angle);
   if (curacionAlpha > 0) {
-    curacionAlpha -= 0.02; // controlá la velocidad de desvanecimiento
-    if (curacionAlpha < 0) curacionAlpha = 0;
-  }  
-  
-  drawHUD();
-  if (showControls) {
-    // Si pasaron más de 8 segundos, empezar a desvanecer
-    const elapsed = Date.now() - controlsStartTime;
-    if (elapsed > 4000) {
-      controlsAlpha -= 0.02;
-      if (controlsAlpha <= 0) {
-        showControls = false;
-      }
-    }
-  
-    ctx.save();
-    ctx.globalAlpha = controlsAlpha;
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
-    ctx.fillStyle = "white";
-    ctx.font = "28px Arial";
-    ctx.textAlign = "center";
-  
-    const centerX = canvas.width / 2;
-    const baseY = canvas.height / 2 - 100;
-  
-    ctx.fillText("Controles", centerX, baseY);
-  
-    ctx.font = "22px Arial";
-    ctx.fillText("🖱 Click izquierdo: Disparar", centerX, baseY + 40);
-    ctx.fillText("WASD: Moverse", centerX, baseY + 80);
-    ctx.fillText("R: Recargar", centerX, baseY + 120);
-    ctx.fillText("Espacio: Esquivar", centerX, baseY + 160);
-  
-    ctx.font = "16px Arial";
-    ctx.fillText("Presiona Espacio para saltar", centerX, baseY + 210);
-  
-    ctx.restore();
-  }  
-}
+    ctx.filter = `drop-shadow(0 0 20px rgba(0, 255, 0, ${curacionAlpha}))`;
+  }
+  ctx.drawImage(playerImage, -player.width / 2, -player.height / 2, player.width, player.height);
+  ctx.filter = "none";
+  ctx.restore();
 
+  drawHUD();
+
+  if (curacionAlpha > 0) {
+    curacionAlpha -= 0.02;
+    if (curacionAlpha < 0) curacionAlpha = 0;
+  }
+}
 
 const medkitImage = new Image();
 medkitImage.src = "/assets/botiquin.png";
@@ -533,9 +692,9 @@ function dropMedkitIfNeeded() {
       x: Math.random() * (canvas.width - 60) + 30,
       y: Math.random() * (canvas.height - 60) + 30,
       radius: 30
-    });    
+    });
     lastScoreForMedkit = player.score;
-  }  
+  }
 }
 
 function checkMedkitPickup() {
@@ -544,12 +703,12 @@ function checkMedkitPickup() {
     const dy = player.y - medkit.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-   if (distance < medkit.radius + player.width / 2) {
+    if (distance < medkit.radius + player.width / 2) {
       player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.4);
       sonidoCuracion.currentTime = 0;
       sonidoCuracion.play();
       curacionAlpha = 1;
-      return false; // eliminar el botiquín
+      return false;
     }
     return true;
   });
@@ -563,8 +722,8 @@ function spawnBlood(x, y, amount = 10) {
       x,
       y,
       radius: Math.random() * 3 + 2,
-      dx: (Math.random() - 0.5) * 4,
-      dy: (Math.random() - 0.5) * 4,
+      dx: (Math.random() - 0.5) * 200,
+      dy: (Math.random() - 0.5) * 200,
       alpha: 1
     });
   }
@@ -591,11 +750,14 @@ function restartGame() {
   player.isReloading = false;
   totalPausedTime = 0;
   isGameOver = false;
+
+  showControls = true;
+  controlsAlpha = 1;
+  controlsStartTime = Date.now();
 }
 
 let isPaused = false;
 
-// diseños pausa
 const pauseMenu = document.createElement("div");
 pauseMenu.style.position = "fixed";
 pauseMenu.style.top = "50%";
@@ -607,10 +769,9 @@ pauseMenu.style.padding = "20px";
 pauseMenu.style.textAlign = "center";
 pauseMenu.style.borderRadius = "10px";
 pauseMenu.style.fontFamily = "'Spartan', sans-serif";
-pauseMenu.style.display = "none"; // 
+pauseMenu.style.display = "none";
 document.body.appendChild(pauseMenu);
 
-// Agregar contenido al menú de pausa
 pauseMenu.innerHTML = `
     <h2>Pausa</h2>
     <button id="resumeButton" style="width: 100%; padding: 10px;margin-bottom:5px; font-size: 16px; border-radius: 5px; background-color: rgba(42, 95, 53, 0.781);; color: white; border: none; cursor: pointer; margin-right: 30px ">Reanudar</button>
@@ -643,49 +804,86 @@ retryButton.addEventListener("click", () => {
   restartGame();
 });
 
-// Seleccionar botones dentro del menú de pausa
 const resumeButton = document.getElementById("resumeButton");
 const mainMenuButton = document.getElementById("mainMenuButton");
 
-// Función para pausar y reanudar el juego
 function togglePause() {
   if (!isPaused) {
-    pauseStart = Date.now(); // inicio de pausa
+    pauseStart = Date.now();
   } else {
-    totalPausedTime += Date.now() - pauseStart; // acumular tiempo pausado
+    totalPausedTime += Date.now() - pauseStart;
   }
   isPaused = !isPaused;
   pauseMenu.style.display = isPaused ? "block" : "none";
 }
 
-// Eventos de los botones del menú de pausa
 resumeButton.addEventListener("click", togglePause);
 mainMenuButton.addEventListener("click", () => {
   window.location.href = "../index.html";
 });
 
-// Detectar tecla Escape para activar/desactivar el menú de pausa
 document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && player.hp > 0) {
-        togglePause();
-    }
+  if (e.key === "Escape" && player.hp > 0) {
+    togglePause();
+  }
 });
 
-function gameLoop() {
+function drawControls() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const timeSinceControlsStart = Date.now() - controlsStartTime;
+  if (timeSinceControlsStart < controlsDisplayDuration) {
+    controlsAlpha = 1;
+  } else {
+    const fadeProgress = (timeSinceControlsStart - controlsDisplayDuration) / 1000;
+    controlsAlpha = Math.max(0, 1 - fadeProgress);
+    if (controlsAlpha <= 0) {
+      showControls = false;
+    }
+  }
+
+  ctx.save();
+  ctx.globalAlpha = controlsAlpha;
+  ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.font = "30px Arial";
+  ctx.fillStyle = "white";
+  ctx.textAlign = "center";
+  ctx.fillText("Controles", canvas.width / 2, canvas.height / 2 - 100);
+
+  ctx.font = "20px Arial";
+  ctx.fillText("WASD o Flechas para mover", canvas.width / 2, canvas.height / 2 - 40);
+  ctx.fillText("Clic Izquierdo / Joystick Derecho para disparar", canvas.width / 2, canvas.height / 2);
+  ctx.fillText("R para recargar / Botón R en móvil", canvas.width / 2, canvas.height / 2 + 40);
+  ctx.fillText("Espacio para esquivar / Botón ⤴ en móvil", canvas.width / 2, canvas.height / 2 + 80);
+
+  if (controlsAlpha > 0.5) {
+    ctx.fillText("Presiona ESPACIO para comenzar", canvas.width / 2, canvas.height / 2 + 150);
+  }
+
+  ctx.restore();
+}
+
+
+function gameLoop(currentTime) {
+  const deltaTime = (currentTime - lastFrameTime) / 1000;
+  lastFrameTime = currentTime;
+
   if (showControls) {
-    draw(); // solo mostrar controles
+    drawControls();
     requestAnimationFrame(gameLoop);
     return;
-  }  
+  }
   if (!isPaused && !isGameOver) {
-    movePlayer();
+    movePlayer(deltaTime);
     manageShooting();
-    updateBullets();
+    updateBullets(deltaTime);
     spawnEnemies();
-    updateEnemies();
-    updateEnemyProjectiles();
+    updateEnemies(deltaTime);
+    updateEnemyProjectiles(deltaTime);
     dropMedkitIfNeeded();
-    checkMedkitPickup();      
+    checkMedkitPickup();
     draw();
   }
   updateTimer();
