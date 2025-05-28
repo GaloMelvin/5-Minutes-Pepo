@@ -508,6 +508,19 @@ function drawHealthBar() {
   ctx.strokeRect(10, 10, barWidth, barHeight);
 }
 
+function drawTimer() {
+  const timeElapsed = Date.now() - timerStart - totalPausedTime;
+  const timeRemaining = Math.max(0, timerDuration - timeElapsed);
+
+  const minutes = Math.floor(timeRemaining / 60000);
+  const seconds = Math.floor((timeRemaining % 60000) / 1000);
+  const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+  ctx.font = "24px Arial";
+  ctx.fillStyle = "white";
+  ctx.textAlign = "right";
+}
+
 function drawHUD() {
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform for HUD elements
@@ -751,6 +764,7 @@ function restartGame() {
   totalPausedTime = 0;
   isGameOver = false;
 
+  timerStart = Date.now();
   showControls = true;
   controlsAlpha = 1;
   controlsStartTime = Date.now();
@@ -827,6 +841,21 @@ document.addEventListener("keydown", (e) => {
     togglePause();
   }
 });
+
+const timerDuration = isFinite;
+let timerStart = Date.now();
+
+function updateTimer() {
+  if (isGameOver) return;
+
+  const timeElapsed = Date.now() - timerStart - totalPausedTime;
+  const timeRemaining = Math.max(0, timerDuration - timeElapsed);
+
+  if (timeRemaining <= 0) {
+    isGameOver = true;
+    window.location.href = "/HTML/final.html";
+  }
+}
 
 function drawControls() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
